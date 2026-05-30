@@ -1,0 +1,10 @@
+{
+  "id": "JOB_ID",
+  "title": "任务标题",
+  "status": "draft",
+  "createdAt": "",
+  "updatedAt": "",
+  "createdBy": "feishu-user",
+  "assignee": null,
+  "history": []
+}

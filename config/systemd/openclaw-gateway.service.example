@@ -1,0 +1,18 @@
+# 可选：用户级 systemd 服务（onboard --install-daemon 通常已创建）
+# 复制到 ~/.config/systemd/user/openclaw-gateway.service 后:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now openclaw-gateway
+
+[Unit]
+Description=OpenClaw Gateway
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/workspace/test-pipeline/config/.env
+ExecStart=%h/.npm-global/bin/openclaw gateway run
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

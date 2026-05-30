@@ -1,0 +1,10 @@
+# 追加到 ~/.codex/config.toml 的 [profiles.ci] 段
+# deploy.sh 会合并此文件
+
+[profiles.ci]
+model = "gpt-5.3-codex"
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[profiles.ci.sandbox]
+writable_roots = ["{{PIPELINE_ROOT}}/pipeline/jobs"]

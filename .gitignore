@@ -1,0 +1,39 @@
+# ── 密钥与本地配置 ──────────────────────────────────────────
+config/.env
+*.pem
+*.key
+
+# ── 流水线运行时数据（保留模板） ─────────────────────────────
+pipeline/jobs/*
+!pipeline/jobs/_template/
+!pipeline/jobs/_template/**
+
+pipeline/delivered/
+pipeline/feedback/inbox/
+pipeline/feedback/raw/
+
+# ── OpenClaw Agent 工作区运行时状态 ──────────────────────────
+workspaces/*/.openclaw/
+workspaces/*/.git/
+
+# ── 依赖与构建产物 ───────────────────────────────────────────
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# ── 日志与临时文件 ───────────────────────────────────────────
+*.log
+*.tmp
+*.swp
+*~
+.cache/
+
+# ── 操作系统 ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── 编辑器 ───────────────────────────────────────────────────
+.idea/
+*.sublime-project
+*.sublime-workspace

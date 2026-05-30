@@ -1,0 +1,167 @@
+// 复制到 ~/.openclaw/openclaw.json 或由 deploy.sh 合并
+// 环境变量见 config/env.example
+
+{
+  gateway: {
+    mode: "local",
+  },
+
+  // 飞书通道插件（须显式启用，否则 Gateway 不加载 channels.feishu）
+  plugins: {
+    allow: ["feishu"],
+    entries: {
+      feishu: { enabled: true },
+    },
+  },
+
+  // 代理站 code.rayinai.com（OpenAI 兼容 /v1），变量来自 config/.env
+  env: {
+    ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}",
+    ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL}",
+    OPENAI_API_KEY: "${ANTHROPIC_API_KEY}",
+  },
+
+  models: {
+    mode: "merge",
+    providers: {
+      rayin: {
+        baseUrl: "${ANTHROPIC_BASE_URL}",
+        apiKey: "${ANTHROPIC_API_KEY}",
+        api: "openai-completions",
+        models: [
+          {
+            id: "gpt-5.3-codex",
+            name: "GPT-5.3 Codex (Rayin)",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 200000,
+            maxTokens: 32768,
+          },
+        ],
+      },
+    },
+  },
+
+  agents: {
+    defaults: {
+      model: "${OPENCLAW_DEFAULT_MODEL}",
+      models: {
+        "${OPENCLAW_DEFAULT_MODEL}": {},
+      },
+    },
+    list: [
+      {
+        id: "agent-a",
+        default: true,
+        name: "需求编排 Agent A",
+        workspace: "${PIPELINE_ROOT}/workspaces/agent-a",
+        identity: { name: "Agent A" },
+        tools: {
+          allow: ["read", "write", "edit", "exec", "message", "sessions_list", "sessions_history"],
+          deny: ["cron"],
+        },
+      },
+      {
+        id: "agent-design",
+        name: "设计 Stitch",
+        workspace: "${PIPELINE_ROOT}/workspaces/agent-design",
+        tools: {
+          allow: ["read", "write", "edit", "exec"],
+          deny: ["cron", "message"],
+        },
+      },
+      {
+        id: "agent-coder",
+        name: "Claude Code 实现",
+        workspace: "${PIPELINE_ROOT}/workspaces/agent-coder",
+        tools: {
+          allow: ["read", "write", "edit", "exec"],
+          deny: ["cron", "message"],
+        },
+      },
+      {
+        id: "agent-verifier",
+        name: "Claude Code 验证",
+        workspace: "${PIPELINE_ROOT}/workspaces/agent-verifier",
+        tools: {
+          allow: ["read", "write", "edit", "exec", "message"],
+          deny: ["cron"],
+        },
+      },
+      {
+        id: "agent-feedback",
+        name: "反馈扫描",
+        workspace: "${PIPELINE_ROOT}/workspaces/agent-feedback",
+        tools: {
+          allow: ["read", "write", "edit", "exec"],
+          deny: ["cron", "message"],
+        },
+      },
+    ],
+  },
+
+  // 飞书 → 仅 Agent A（在 deploy 后根据 open_id 补充 binding）
+  bindings: [
+    {
+      agentId: "agent-a",
+      match: { channel: "feishu", accountId: "default" },
+    },
+  ],
+
+  channels: {
+    feishu: {
+      enabled: true,
+      domain: "feishu",
+      connectionMode: "websocket",
+      dmPolicy: "pairing",
+      groupPolicy: "allowlist",
+      requireMention: true,
+      streaming: true,
+      accounts: {
+        default: {
+          appId: "${FEISHU_APP_ID}",
+          appSecret: "${FEISHU_APP_SECRET}",
+        },
+      },
+    },
+  },
+
+  // 语音转写（飞书录音）— 配置任一 provider
+  tools: {
+    media: {
+      audio: {
+        enabled: true,
+        // models: { ... } 见 OpenClaw 文档，使用 OPENAI_API_KEY 等
+      },
+    },
+  },
+
+  mcp: {
+    sessionIdleTtlMs: 600000,
+    servers: {
+      // Stitch 官方远程 MCP（API Key，无需 gcloud）
+      // 在 https://stitch.withgoogle.com → Stitch settings → Create key
+      stitch: {
+        url: "https://stitch.googleapis.com/mcp",
+        transport: "streamable-http",
+        headers: {
+          "X-Goog-Api-Key": "${STITCH_API_KEY}",
+        },
+        codex: {
+          agents: ["agent-design"],
+          defaultToolsApprovalMode: "auto",
+        },
+      },
+    },
+  },
+
+  cron: {
+    enabled: true,
+    maxConcurrentRuns: 2,
+  },
+
+  session: {
+    dmScope: "main",
+  },
+}
