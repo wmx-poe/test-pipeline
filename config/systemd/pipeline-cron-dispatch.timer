@@ -1,0 +1,10 @@
+[Unit]
+Description=Run pipeline cron dispatch every minute
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

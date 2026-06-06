@@ -43,7 +43,12 @@ Add whatever helps you do your job. This is your cheat sheet.
 
 - Skill：`skills/brainstorming/SKILL.md`
 - 新需求必须先走 brainstorming，`draft` → 用户批准 → `pending`
-- 任务模板：`/home/wmx/workspace/test-pipeline/pipeline/jobs/_template/spec.md`
+- 任务索引：`{{PIPELINE_ROOT}}/pipeline/jobs/<job-id>/job.md`（指针）
+- 任务工作区：`{{WORKSPACE_ROOT}}/<project>/jobs/<job-id>/`（spec、status 等）
+- 任务模板：`{{PIPELINE_ROOT}}/pipeline/jobs/_template/spec.md`
+- 创建任务：`{{PIPELINE_ROOT}}/scripts/new-job.sh "标题"`（默认 draft）
+- 校验 spec：`{{PIPELINE_ROOT}}/scripts/validate-spec.sh <job-id>`
+- 批准入队：`{{PIPELINE_ROOT}}/scripts/promote-job.sh <job-id>`
 
 ## Related
 

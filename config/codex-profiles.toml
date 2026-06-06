@@ -7,4 +7,4 @@ approval_policy = "never"
 sandbox_mode = "workspace-write"
 
 [profiles.ci.sandbox]
-writable_roots = ["{{PIPELINE_ROOT}}/pipeline/jobs"]
+writable_roots = ["{{WORKSPACE_ROOT}}"]

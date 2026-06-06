@@ -9,8 +9,9 @@ pipeline/jobs/*
 !pipeline/jobs/_template/**
 
 pipeline/delivered/
-pipeline/feedback/inbox/
-pipeline/feedback/raw/
+pipeline/feedback/
+
+# 注：delivered/feedback 已迁至 WORKSPACE_ROOT/<project>/，上述规则保留以防遗留数据
 
 # ── OpenClaw Agent 工作区运行时状态 ──────────────────────────
 workspaces/*/.openclaw/

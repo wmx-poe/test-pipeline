@@ -87,7 +87,37 @@ case "$MODE" in
     run_claude acceptEdits "Bash,Read,Edit,Glob,Grep" "${REPORTS_DIR}/claude-implement-last.md"
     ;;
   verify)
+    JOB_DIR="$(cd "$SRC_DIR/.." && pwd)"
+    JOB_ID="$(basename "$JOB_DIR")"
+    RUNTIME_EC=0
+    if [[ -x "${SCRIPT_DIR}/verify-pipeline.sh" ]]; then
+      "${SCRIPT_DIR}/verify-pipeline.sh" "$JOB_DIR" || RUNTIME_EC=$?
+    else
+      echo "警告: verify-pipeline.sh 不存在，跳过运行时验证" >&2
+      RUNTIME_EC=2
+    fi
+    if [[ "$RUNTIME_EC" -ne 0 ]]; then
+      echo "[claude-pipeline] 运行时验证失败，跳过 Claude 审查，自动回流 coder" >&2
+      if [[ -x "${SCRIPT_DIR}/complete-verify.sh" ]]; then
+        "${SCRIPT_DIR}/complete-verify.sh" "$JOB_ID" --runtime-only || true
+      fi
+      exit "${RUNTIME_EC:-1}"
+    fi
+    RUNTIME_NOTE="运行时验证通过（见 reports/verify-runtime.md）"
+    FULL_PROMPT="${PROMPT}
+
+---
+【流水线强制要求】
+1. 必须先阅读 ../reports/verify-runtime.md（及 deploy-info.md 若存在）
+2. ${RUNTIME_NOTE}
+3. 禁止仅做静态代码审查；结论必须综合运行时结果与 spec 验收标准
+4. 在 reports/verify.md 末尾写「结论：PASS」或「结论：FAIL」
+5. 若 FAIL，列出阻塞项清单供 coder 修复"
+    PROMPT="$FULL_PROMPT"
     run_claude dontAsk "Bash,Read,Glob,Grep" "${REPORTS_DIR}/verify.md"
+    if [[ -x "${SCRIPT_DIR}/complete-verify.sh" ]]; then
+      "${SCRIPT_DIR}/complete-verify.sh" "$JOB_ID" --full || true
+    fi
     ;;
   verify-fix)
     run_claude acceptEdits "Bash,Read,Edit,Glob,Grep" "${REPORTS_DIR}/verify-fix.md"

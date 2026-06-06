@@ -2,7 +2,7 @@
 
 本文说明：**修改 `config/.env` 后需要重启什么**，以及 **如何确认 OpenClaw 已连通大模型**。适用于本仓库的 OpenClaw + 飞书流水线部署。
 
-相关文档：[README.md](README.md)、[docs/CREDENTIALS.md](docs/CREDENTIALS.md)、[docs/SETUP-FEISHU.md](docs/SETUP-FEISHU.md)。
+相关文档：[README.md](README.md)、[docs/GUIDE.md](docs/GUIDE.md)。
 
 ---
 
@@ -33,7 +33,7 @@ systemctl --user restart openclaw-gateway.service
 | 变量 | 写入位置 |
 |------|----------|
 | `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | `~/.openclaw/openclaw.json` |
-| `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` | `~/.openclaw/openclaw.json`（含 `models.providers.rayin`） |
+| `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY` | `~/.openclaw/openclaw.json`（含 `models.providers.deepseek`） |
 | `OPENCLAW_DEFAULT_MODEL` | `~/.openclaw/openclaw.json` |
 | `STITCH_API_KEY` | `~/.openclaw/openclaw.json` + Stitch MCP |
 | `PIPELINE_ROOT` | 工作区路径、`openclaw.json`、Codex profile |
@@ -64,11 +64,33 @@ openclaw onboard   # 按向导更新模型提供商
 
 | 组件 | 说明 |
 |------|------|
-| **OpenClaw Cron**（`pipeline-design-scan` 等） | 由 Gateway 调度，`gateway restart` 即可 |
+| **OpenClaw Cron 定义**（`pipeline-design-scan` 等） | 注册在 `~/.openclaw/cron/jobs.json`，**默认 disabled**；由 `cron-dispatch.sh` 按任务状态 `openclaw cron run` |
+| **`pipeline-cron-dispatch.timer`** | 用户 systemd，每分钟跑 dispatch；`setup-cron.sh --install-timer` 安装 |
 | **`setup-cron.sh` / `new-job.sh` 等脚本** | 每次执行时读取 `.env`，无常驻进程 |
-| **pipeline/jobs 下的任务文件** | 磁盘状态，不缓存 `.env` |
+| **pipeline/jobs 指针 + WORKSPACE_ROOT 工作区** | 磁盘状态，不缓存 `.env` |
 
 仅当**新增或修改 Cron 任务定义**时，才需再执行 `./scripts/setup-cron.sh`（一般不是改 `.env` 的常规步骤）。
+
+### 1.4.1 流水线 Cron dispatch（有任务才扫）
+
+OpenClaw 内 5 条 Cron **保持 `enabled: false`**，避免每分钟空跑 LLM。  
+[`scripts/cron-dispatch.sh`](scripts/cron-dispatch.sh) 读 `pipeline/jobs/*/job.md` 索引的工作区 `status.json`，满足条件才 `openclaw cron run`：
+
+| 条件 | 触发的 job |
+|------|------------|
+| 存在 `pending` 且无 `designing` | `pipeline-design-scan` |
+| 存在 `design_done` 或 `fix_needed` 且无 `implementing` | `pipeline-coder-scan` |
+| 存在 `impl_done` 且无 `verifying` | `pipeline-verify-scan` |
+| `WORKSPACE_ROOT/*/delivered/` 或 `*/feedback/raw/` 有内容 | `pipeline-feedback-scan` |
+| `WORKSPACE_ROOT/*/feedback/inbox/*.md` 存在 | `pipeline-a-feedback-digest` |
+
+```bash
+./scripts/setup-cron.sh --install-timer   # 安装 systemd timer（每分钟）
+VERBOSE=1 DRY_RUN=1 ./scripts/cron-dispatch.sh   # 试跑，只看会触发谁
+systemctl --user status pipeline-cron-dispatch.timer
+```
+
+改 `.env` 后 dispatch timer **无需**重启；改 `openclaw.json5` 的 `cron.maxConcurrentRuns` 需 `deploy.sh` + `gateway restart`。
 
 ### 1.5 systemd 与 `EnvironmentFile`
 
@@ -84,6 +106,16 @@ nano config/.env
 openclaw gateway restart
 openclaw gateway status
 ```
+
+### 1.7 Docker（verify-pipeline 必需）
+
+| 现象 | 处理 |
+|------|------|
+| `verify-pipeline.sh` 报 Docker 不可用 | `./scripts/install-docker.sh`，然后 `newgrp docker` 或重新登录 |
+| `permission denied` | `groups` 应含 `docker`；`sudo usermod -aG docker $USER` 后重新登录 |
+| `docker compose` 不存在 | `sudo apt install docker-compose-v2` |
+
+详见 [docs/VERIFICATION.md § Docker 环境](docs/VERIFICATION.md#docker-环境必需从零安装)。
 
 ---
 
@@ -101,13 +133,15 @@ openclaw gateway status
 
 ### 2.2 本项目的模型配置
 
-默认通过 Rayin 代理（OpenAI 兼容），变量在 `config/.env`：
+默认使用 **DeepSeek**（Anthropic 兼容端点），变量在 `config/.env`：
 
-- `ANTHROPIC_BASE_URL` → 如 `https://code.rayinai.com/v1`
-- `ANTHROPIC_API_KEY`
-- `OPENCLAW_DEFAULT_MODEL` → 如 `rayin/gpt-5.3-codex`
+- `ANTHROPIC_BASE_URL` → `https://api.deepseek.com/anthropic`（不带 `/v1`）
+- `ANTHROPIC_API_KEY` → DeepSeek API Key
+- `OPENCLAW_DEFAULT_MODEL` → 如 `deepseek/deepseek-v4-pro[1m]`
 
-模板见 [`config/openclaw.json5`](config/openclaw.json5) 中 `models.providers.rayin`。
+模板见 [`config/openclaw.json5`](config/openclaw.json5) 中 `models.providers.deepseek`。
+
+**Rayin 备用**（OpenAI 兼容）：`config/.env` 与 `openclaw.json5` 中保留了注释块；切换时注释 DeepSeek、取消 Rayin 注释，并改 `OPENCLAW_DEFAULT_MODEL` 为 `rayin/gpt-5.3-codex`。
 
 ### 2.3 步骤 1：查看模型与鉴权配置
 
@@ -119,8 +153,8 @@ openclaw models status
 
 关注：
 
-- **Default**：应为 `rayin/gpt-5.3-codex`（或与 `.env` 一致）
-- **Auth overview**：`rayin` 等 provider 的 `effective=...` 非空
+- **Default**：应为 `deepseek/deepseek-v4-pro[1m]`（或与 `.env` 一致）
+- **Auth overview**：`deepseek` / `anthropic` 等 provider 的 `effective=...` 非空
 
 ### 2.4 步骤 2：直接打模型 API（推荐）
 
@@ -128,7 +162,7 @@ openclaw models status
 source config/.env
 
 openclaw infer model run \
-  --model rayin/gpt-5.3-codex \
+  --model deepseek/deepseek-v4-pro[1m] \
   --prompt "只回复一个字：好"
 ```
 
@@ -140,13 +174,11 @@ openclaw infer model run \
 ```bash
 source config/.env
 
-curl -sS "${ANTHROPIC_BASE_URL%/}/models" \
-  -H "Authorization: Bearer ${ANTHROPIC_API_KEY}"
-
-curl -sS "${ANTHROPIC_BASE_URL%/}/chat/completions" \
+curl -sS "${ANTHROPIC_BASE_URL%/}/v1/messages" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${ANTHROPIC_API_KEY}" \
-  -d '{"model":"gpt-5.3-codex","messages":[{"role":"user","content":"只回复一个字：好"}],"max_tokens":10}'
+  -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model":"deepseek-v4-pro[1m]","max_tokens":10,"messages":[{"role":"user","content":"只回复一个字：好"}]}'
 ```
 
 ### 2.5 步骤 3：走完整 Agent 链路
@@ -172,7 +204,7 @@ openclaw agent --agent agent-a --message "回复 OK" --json
 ### 2.6 步骤 4：日志与状态
 
 ```bash
-openclaw status              # Sessions 中 Model 应为 gpt-5.3-codex 等
+openclaw status              # Sessions 中 Model 应为 deepseek-v4-pro[1m] 等
 openclaw logs --follow       # 发飞书或跑 agent 时看 401/429/Connection error
 openclaw doctor              # 配置、Gateway、通道体检
 openclaw health              # Gateway 与 Agent 摘要
@@ -190,12 +222,12 @@ openclaw health              # Gateway 与 Agent 摘要
 | 现象 | 可能原因 | 处理 |
 |------|----------|------|
 | `401` / `invalid api key` | Key 错误或未完成 deploy | 改 `.env` → `deploy.sh` → `gateway restart` |
-| `404` / model not found | `OPENCLAW_DEFAULT_MODEL` 与代理侧模型 id 不一致 | 用 `curl .../models` 核对可用 id |
-| `Connection error` | 网络/DNS/代理/站点不可达 | 先 `curl` 测 `/v1/models` 与 `/chat/completions`；检查 `HTTP_PROXY`、VPN |
+| `404` / model not found | `OPENCLAW_DEFAULT_MODEL` 与 DeepSeek 侧模型 id 不一致 | 核对 `deepseek-v4-pro[1m]` 等 id |
+| `Connection error` | 网络/DNS/代理/站点不可达 | 先 `curl` 测 `/v1/messages`；检查 `HTTP_PROXY`、VPN |
 | `models status` 有 Key 但 infer 失败 | Gateway 未加载新配置 | `gateway restart` |
 | `device token scope mismatch` / `EMBEDDED FALLBACK` | CLI 设备权限不足（常见：只有 `operator.read`，缺 `operator.write`） | 见 [§2.8.1](#281-device-token-scope-mismatch) |
 | `[bundle-mcp] failed to start server "stitch"` | `STITCH_API_KEY` 未填或无效 | 见 [§2.8.2](#282-stitch-mcp-启动失败)；**不影响 agent-a** |
-| 配对后仍不回复 | 无有效 LLM Key | 完成 [docs/CREDENTIALS.md](docs/CREDENTIALS.md) 第 2 节 + `onboard` |
+| 配对后仍不回复 | 无有效 LLM Key | 完成 [docs/GUIDE.md](docs/GUIDE.md) 第六节 + `onboard` |
 
 #### 2.8.1 device token scope mismatch
 
@@ -234,7 +266,7 @@ openclaw agent --agent agent-a --message "回复 OK" --json
 **临时绕过**（仅测模型，不验证 Gateway 全链路）：
 
 ```bash
-openclaw infer model run --model rayin/gpt-5.3-codex --prompt "好"
+openclaw infer model run --model deepseek/deepseek-v4-pro[1m] --prompt "好"
 openclaw agent --agent agent-a --message "回复 OK" --local --json
 ```
 
@@ -261,7 +293,7 @@ openclaw gateway restart
 
 3. 验证：`openclaw mcp show stitch` 应显示 `url: https://stitch.googleapis.com/mcp`
 
-详见 [docs/CREDENTIALS.md](docs/CREDENTIALS.md) §3。
+详见 [docs/GUIDE.md](docs/GUIDE.md) 第七节。
 
 ### 2.9 推荐自检顺序
 
@@ -294,7 +326,7 @@ nano config/.env
 openclaw gateway restart
 openclaw gateway status
 openclaw models status
-openclaw infer model run --model rayin/gpt-5.3-codex --prompt "只回复一个字：好"
+openclaw infer model run --model deepseek-v4-pro[1m] --prompt "只回复一个字：好"
 claude --bare -p "只回复一个字：好" --settings ~/.claude/pipeline-settings.json
 ```
 

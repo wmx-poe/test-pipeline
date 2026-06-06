@@ -12,6 +12,7 @@ load_env() {
     set +a
   fi
   export PIPELINE_ROOT="${PIPELINE_ROOT:-$REPO_ROOT}"
+  export WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(dirname "$PIPELINE_ROOT")/pipeline-workspace}"
 }
 
 require_cmd() {
@@ -25,8 +26,8 @@ require_cmd() {
 substitute_workspace_files() {
   local dir="$1"
   find "$dir" -type f \( -name '*.md' -o -name '*.toml' \) -print0 | while IFS= read -r -d '' f; do
-    if grep -q '{{PIPELINE_ROOT}}' "$f" 2>/dev/null; then
-      sed -i "s|{{PIPELINE_ROOT}}|${PIPELINE_ROOT}|g" "$f"
+    if grep -qE '{{PIPELINE_ROOT}}|{{WORKSPACE_ROOT}}' "$f" 2>/dev/null; then
+      sed -i "s|{{PIPELINE_ROOT}}|${PIPELINE_ROOT}|g; s|{{WORKSPACE_ROOT}}|${WORKSPACE_ROOT}|g" "$f"
     fi
   done
 }

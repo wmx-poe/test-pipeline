@@ -80,6 +80,11 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 log "Claude Code $(claude --version 2>/dev/null || echo '?')"
 
+# Docker（验证阶段容器化部署必需，详见 docs/VERIFICATION.md）
+if [[ -x "${SCRIPT_DIR}/install-docker.sh" ]]; then
+  "${SCRIPT_DIR}/install-docker.sh" || log "Docker 安装未完成，请手动: ./scripts/install-docker.sh"
+fi
+
 # 飞书通道插件（OpenClaw 2026.x 需单独安装）
 if openclaw plugins list 2>/dev/null | grep -qE 'feishu|@openclaw/feishu'; then
   log "飞书插件已安装"
@@ -136,7 +141,7 @@ log "基础安装完成。"
 cat <<'EOF'
 
 后续步骤（以部署用户执行，非 root）:
-  完整图文流程: docs/SETUP-FEISHU.md
+  完整部署指南: docs/GUIDE.md
 
   1. 编辑 config/.env（飞书、API Key、STITCH_API_KEY、CLAUDE_CODE_*）
   2. openclaw onboard --install-daemon
@@ -144,6 +149,7 @@ cat <<'EOF'
   4. 飞书开放平台保存「长连接」并发布应用
   5. openclaw pairing approve feishu <码>
   6. codex login                       # 可选
-  7. ./scripts/setup-cron.sh
+  7. ./scripts/install-docker.sh       # 验证阶段必需（若 install-ubuntu 未装成功）
+  8. ./scripts/setup-cron.sh
 
 EOF
