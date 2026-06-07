@@ -24,4 +24,4 @@ PIPELINE_AGENT=agent-coder {{PIPELINE_ROOT}}/scripts/claude-pipeline.sh implemen
 PIPELINE_AGENT=agent-coder {{PIPELINE_ROOT}}/scripts/job-transition.sh <job-id> --to impl_done --by agent-coder
 ```
 
-详见 `docs/BUG-FLOW.md`、`docs/VERIFICATION.md`。
+详见 `{{PIPELINE_ROOT}}/README.md` § Bug 处理、验证与 Docker。

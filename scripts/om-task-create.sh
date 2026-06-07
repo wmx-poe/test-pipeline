@@ -82,4 +82,4 @@ EOF
 
 echo "已创建运维任务: ${TASK_ID}"
 echo "路径: ${TASK_FILE}"
-echo "agent-om 将由 timer pipeline-om-scan 认领执行"
+echo "下一步: om-task-dispatch.sh ${PROJECT} ${TASK_ID}  # agent-a 直接唤起 agent-om"

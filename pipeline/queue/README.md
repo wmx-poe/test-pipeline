@@ -26,9 +26,11 @@ pipeline-workspace/<project>/
   jobs/<job-id>/          # spec, status, design, src, reports（进行中）
   delivered/<job-id>/     # 验证通过后复制（与 jobs 平级）
   feedback/               # raw, inbox, inbox/processed（与 delivered 平级）
-  ops/                    # agent-om 运维（与 delivered 平级）
-    tasks/                # agent-a 下发的任务单
-    reports/              # agent-om 执行报告
+  ops/                    # agent-om（agent-a 直驱，不经 timer）
+    tasks/                # pending → in_progress → done
+    reports/
 ```
 
-验证与部署约定（Docker 运行时验证、失败回流 coder）：[docs/VERIFICATION.md](../../docs/VERIFICATION.md)
+Job 与 Ops 状态机见 [README.md](../../README.md#状态机)。
+
+验证与部署约定：[README.md § 验证与 Docker](../../README.md#验证与-docker)

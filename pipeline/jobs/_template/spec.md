@@ -33,7 +33,7 @@
 4. 验证 FAIL → `fix_needed` → coder 读 `verify-feedback.md` 修复 → 重新验证（最多 3 轮）
 5. 验证 PASS → `deploy-info.md` 含访问地址与测试账号 → 交付与反馈循环
 
-详见 `docs/VERIFICATION.md`。
+详见 `{{PIPELINE_ROOT}}/README.md` § 验证与 Docker。
 
 ## 附件
 

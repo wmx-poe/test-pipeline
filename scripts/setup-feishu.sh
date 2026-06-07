@@ -47,5 +47,5 @@ cat <<EOF
   2. 版本管理与发布 → 发布应用
   3. 飞书私聊机器人 → openclaw pairing approve feishu <码>
 
-详见: docs/GUIDE.md
+详见: README.md
 EOF

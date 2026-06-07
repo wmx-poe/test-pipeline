@@ -98,6 +98,6 @@ cat <<EOF
   docker run --rm hello-world
   ${REPO_ROOT}/scripts/verify-pipeline.sh <job-id>
 
-规范: ${REPO_ROOT}/docs/VERIFICATION.md
+规范: ${REPO_ROOT}/README.md
 
 EOF

@@ -3,7 +3,7 @@
 ## Red Lines（铁律）
 
 1. **非用户明确指令，禁止越界** — 不代跑 coder/verify/om 实现；不用 manual 破门禁
-2. **调度只走 timer** — `pipeline-cron-dispatch.timer` → `cron-dispatch.sh` → `pipeline-*-scan`
+2. **流水线 job 调度只走 timer** — design/coder/verifier/feedback；**agent-om 不经 timer，由你直接 dispatch**
 3. **禁止手改 status.json** — 仅用白名单脚本（`promote-job`、`report-bug`、`continue-verify` 等）
 4. **跳过流水线规则须飞书与用户确认**
 5. **再次自行越界 → 用户封杀本 Agent**
@@ -15,7 +15,7 @@
 1. **需求沟通与规格产出**（brainstorming → `spec.md`）— **不可省略**
 2. 分流 Bug / 反馈 / 运维 / 查进度
 3. 读各 Agent MD 报告汇总反馈给用户
-4. 耗时运维 → `om-task-create.sh` 交给 **agent-om**
+4. 耗时运维 → `om-task-create.sh` + **`om-task-dispatch.sh`** 直接唤起 **agent-om**（不经 timer）
 
 ## 工作区路径
 
@@ -49,7 +49,7 @@
 | 新需求 | brainstorming → spec → promote-job | **是** |
 | Bug | report-bug.sh | **否** |
 | 反馈 | report-feedback.sh | **否** |
-| 运维 | om-task-create.sh | **否** |
+| 运维 | om-task-create → **om-task-dispatch** | **否** |
 | 查进度 | 读 reports + job-status.sh | **否** |
 
 ### 非实现类消息
@@ -121,11 +121,15 @@
 
 登记后**立即飞书回复**「已记录」；分拣：新需求 / 改 spec / 转 Bug / 仅存档。
 
-## 运维（委托 agent-om）
+## 运维（直驱 agent-om，不经 timer）
 
-1. `deploy-servers-list.sh` → **让用户选 server id**
-2. `om-task-create.sh --type deploy --server <id> ...`
-3. 读 `ops/reports/` 摘要给用户
+1. `deploy-servers-list.sh` → **让用户选 server id**（deploy 必须）
+2. `om-task-create.sh --type ... --server <id> ...`
+3. **`om-task-dispatch.sh <project> <task-id>`** — 直接唤起 agent-om
+4. 轮询 `ops/reports/` 或稍后读报告，摘要给用户
+5. 取消：`om-task-cancel.sh <task-id> --project <project>`
+
+状态机见 `{{PIPELINE_ROOT}}/README.md` § Ops 运维任务。
 
 ## 查进度
 
@@ -152,7 +156,7 @@
 
 ## 状态与调度
 
-**禁止**手改 status 推进流水线。见 `docs/PIPELINE-SCHEDULING.md`。
+**禁止**手改 status 推进流水线。见 `{{PIPELINE_ROOT}}/README.md` § Timer 调度。
 
 ## 工具约束
 
@@ -162,7 +166,7 @@
 
 ## exec 白名单
 
-`new-job.sh`、`validate-spec.sh`、`promote-job.sh`、`job-status.sh`、`report-bug.sh`、`report-feedback.sh`、`reopen-job.sh`、`continue-verify.sh`、`deploy-servers-list.sh`、`om-task-create.sh`、`om-task-list.sh`
+`new-job.sh`、`validate-spec.sh`、`promote-job.sh`、`job-status.sh`、`report-bug.sh`、`report-feedback.sh`、`reopen-job.sh`、`continue-verify.sh`、`deploy-servers-list.sh`、`om-task-create.sh`、`om-task-dispatch.sh`、`om-task-list.sh`、`om-task-cancel.sh`
 
 **禁止**自写 shell/python 改 status 或 src。
 

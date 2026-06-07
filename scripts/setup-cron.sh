@@ -40,7 +40,6 @@ done
 SCAN_DESIGN="【禁止手改 status.json】入口 pending→designing 已由 timer 完成。扫描 pending/designing 卡死：validate-spec → Stitch → design/ → job-transition --to design_done。无任务 NO_REPLY。"
 SCAN_CODER="【禁止手改 status.json】入口 design_done/fix_needed→implementing 已由 timer 完成。读 spec/design 或 verify-feedback/bugs.md → claude-pipeline implement|resume → job-transition --to impl_done。无任务 NO_REPLY。"
 SCAN_VERIFY="【禁止手改 status.json】入口 impl_done→verifying 已由 timer 完成。verify-pipeline（本机 IP 探活）→ claude-pipeline verify → complete-verify 自动设 verified/fix_needed/verify_paused。verified 补 delivered。无任务 NO_REPLY。"
-SCAN_OM="【agent-om 专用】扫描 ${WORKSPACE_ROOT}/*/ops/tasks/ 中 status=pending 的任务；claim → 执行 deploy/diagnose/logs（deploy 须 task 内 server 字段）；写 ops/reports/；发现代码 Bug 用 report-bug.sh --om-task。本地验证 IP 见 detect-pipeline-host-ip.sh。无任务 NO_REPLY。"
 SCAN_FEEDBACK="扫描 ${WORKSPACE_ROOT}/*/delivered 与 */feedback/raw，生成 */feedback/inbox/*.md。Bug 建议 reopen 原 job，非新 job。无新内容 NO_REPLY。"
 SCAN_A_FEEDBACK="读取 ${WORKSPACE_ROOT}/*/feedback/inbox 未处理 md，摘要给用户；bug→reopen-job；新功能→确认后 new-job。无新反馈 NO_REPLY。"
 SCAN_A_VERIFY="扫描 status=verify_paused 且未通知的任务：读 verify-user-report.md，飞书通知用户是否继续下一轮（continue-verify.sh）。通知后 touch reports/.verify-paused-notified。无任务 NO_REPLY。"
@@ -109,6 +108,17 @@ add_job() {
   log "已创建 Cron（disabled）: $name → agent=$agent model=${model:-default}"
 }
 
+remove_legacy_om_cron() {
+  [[ -f "$CRON_JSON" ]] || return 0
+  mapfile -t ids < <(jq -r '.jobs[] | select(.name=="pipeline-om-scan") | .id' "$CRON_JSON" 2>/dev/null)
+  local id
+  for id in "${ids[@]}"; do
+    [[ -n "$id" && "$id" != null ]] || continue
+    openclaw cron remove "$id" 2>/dev/null || true
+    log "已移除 pipeline-om-scan（agent-om 改由 agent-a 直接调度）"
+  done
+}
+
 install_dispatch_timer() {
   local svc_src="${REPO_ROOT}/config/systemd/pipeline-cron-dispatch.service"
   local tmr_src="${REPO_ROOT}/config/systemd/pipeline-cron-dispatch.timer"
@@ -125,10 +135,10 @@ install_dispatch_timer() {
 }
 
 log "注册流水线 Cron（disabled + dispatch 触发）..."
+remove_legacy_om_cron
 add_job "pipeline-design-scan" "agent-design" "$SCAN_DESIGN" "$MODEL_PRO"
 add_job "pipeline-coder-scan" "agent-coder" "$SCAN_CODER" "$MODEL_FLASH"
 add_job "pipeline-verify-scan" "agent-verifier" "$SCAN_VERIFY" "$MODEL_FLASH"
-add_job "pipeline-om-scan" "agent-om" "$SCAN_OM" "$MODEL_FLASH"
 add_job "pipeline-feedback-scan" "agent-feedback" "$SCAN_FEEDBACK" "$MODEL_FLASH"
 add_job "pipeline-a-feedback-digest" "agent-a" "$SCAN_A_FEEDBACK" "$MODEL_FLASH"
 add_job "pipeline-a-verify-notify" "agent-a" "$SCAN_A_VERIFY" "$MODEL_FLASH"

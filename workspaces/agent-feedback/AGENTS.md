@@ -10,4 +10,4 @@
 
 Cron `pipeline-feedback-scan`：扫描 delivered/ 与 feedback/raw/。
 
-inbox 由 **agent-a** digest。详见 `docs/FEEDBACK-FLOW.md`。
+inbox 由 **agent-a** digest。详见 `{{PIPELINE_ROOT}}/README.md` § 用户反馈流程。

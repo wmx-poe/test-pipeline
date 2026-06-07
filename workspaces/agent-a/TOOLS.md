@@ -25,11 +25,14 @@
 - 归并：`reopen-job.sh <job-id> --reason "..."`
 - 验证继续：`continue-verify.sh <job-id> --rounds 10`
 
-## 运维（委托 agent-om）
+## 运维（直驱 agent-om，不经 timer）
 
-- 列服务器：`deploy-servers-list.sh`
-- 创建任务：`om-task-create.sh <project> --type deploy --server prod --title "..." --job-id <id>`
+- 创建：`om-task-create.sh <project> --type ... --title "..."`
+- **唤起**：`om-task-dispatch.sh <project> <task-id>`（create 后必须执行）
+- 取消：`om-task-cancel.sh <task-id> --project <project>`
 - 列任务：`om-task-list.sh <project>`
+
+状态机见 `{{PIPELINE_ROOT}}/README.md`。
 
 ## 禁止
 
@@ -38,4 +41,4 @@
 - 自写 bash/python 改文件
 - 代跑 claude-pipeline / verify-pipeline / Stitch
 
-调度见 `docs/PIPELINE-SCHEDULING.md`。
+调度见 `{{PIPELINE_ROOT}}/README.md` § Timer 调度。

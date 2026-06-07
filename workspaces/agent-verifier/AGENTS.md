@@ -21,4 +21,4 @@ Cron `pipeline-verify-scan`。
 
 每轮迭代最多 **10 次** verify/fix 循环；超限 → `verify_paused` → agent-a 通知用户 → `continue-verify.sh`
 
-详见 `docs/VERIFICATION.md`。
+详见 `{{PIPELINE_ROOT}}/README.md` § 验证与 Docker。

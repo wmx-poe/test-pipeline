@@ -2,7 +2,7 @@
 
 本文说明：**修改 `config/.env` 后需要重启什么**，以及 **如何确认 OpenClaw 已连通大模型**。适用于本仓库的 OpenClaw + 飞书流水线部署。
 
-相关文档：[README.md](README.md)、[docs/GUIDE.md](docs/GUIDE.md)。
+相关文档：[README.md](README.md)、[env-troubleshoot.md](env-troubleshoot.md)。
 
 ---
 
@@ -115,7 +115,7 @@ openclaw gateway status
 | `permission denied` | `groups` 应含 `docker`；`sudo usermod -aG docker $USER` 后重新登录 |
 | `docker compose` 不存在 | `sudo apt install docker-compose-v2` |
 
-详见 [docs/VERIFICATION.md § Docker 环境](docs/VERIFICATION.md#docker-环境必需从零安装)。
+详见 [README.md § 验证与 Docker](README.md#验证与-docker)。
 
 ---
 
@@ -227,7 +227,7 @@ openclaw health              # Gateway 与 Agent 摘要
 | `models status` 有 Key 但 infer 失败 | Gateway 未加载新配置 | `gateway restart` |
 | `device token scope mismatch` / `EMBEDDED FALLBACK` | CLI 设备权限不足（常见：只有 `operator.read`，缺 `operator.write`） | 见 [§2.8.1](#281-device-token-scope-mismatch) |
 | `[bundle-mcp] failed to start server "stitch"` | `STITCH_API_KEY` 未填或无效 | 见 [§2.8.2](#282-stitch-mcp-启动失败)；**不影响 agent-a** |
-| 配对后仍不回复 | 无有效 LLM Key | 完成 [docs/GUIDE.md](docs/GUIDE.md) 第六节 + `onboard` |
+| 配对后仍不回复 | 无有效 LLM Key | 完成 [README.md § 部署指南](README.md#部署指南) + `onboard` |
 
 #### 2.8.1 device token scope mismatch
 
@@ -293,7 +293,7 @@ openclaw gateway restart
 
 3. 验证：`openclaw mcp show stitch` 应显示 `url: https://stitch.googleapis.com/mcp`
 
-详见 [docs/GUIDE.md](docs/GUIDE.md) 第七节。
+详见 [README.md § 部署指南](README.md#部署指南)（Stitch MCP）。
 
 ### 2.9 推荐自检顺序
 

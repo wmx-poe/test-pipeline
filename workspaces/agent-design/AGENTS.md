@@ -19,4 +19,4 @@ Cron `pipeline-design-scan`：pending 或 designing 卡死（无 DESIGN.md）。
 
 失败：`job-transition.sh --to design_failed`
 
-详见 `docs/AGENT-BOUNDARIES.md`。
+详见 `{{PIPELINE_ROOT}}/README.md` § Agent 职责边界。

@@ -9,8 +9,6 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/job-paths.sh"
 # shellcheck source=lib/status-integrity.sh
 source "${SCRIPT_DIR}/lib/status-integrity.sh"
-# shellcheck source=lib/om-tasks.sh
-source "${SCRIPT_DIR}/lib/om-tasks.sh"
 load_env
 
 require_cmd openclaw
@@ -112,23 +110,6 @@ should_run_verify() {
   has_stuck_verifier_job || has_stuck_verified_job
 }
 
-has_pending_om_task() {
-  local project_dir tasks
-  [[ -d "$WORKSPACE_ROOT" ]] || return 1
-  for project_dir in "$WORKSPACE_ROOT"/*; do
-    [[ -d "$project_dir" ]] || continue
-    tasks="$(om_tasks_dir "$(basename "$project_dir")")"
-    compgen -G "${tasks}/om-*.md" >/dev/null 2>&1 || continue
-    grep -l '^status: pending' "${tasks}"/om-*.md >/dev/null 2>&1 && return 0
-  done
-  return 1
-}
-
-should_run_om() {
-  has_pending_om_task || return 1
-  ! agent_cron_busy "agent-om"
-}
-
 has_verify_paused_notify() {
   local jobdir flag
   while IFS= read -r jobdir; do
@@ -215,13 +196,6 @@ run_dispatch() {
     trigger_job "pipeline-verify-scan"
   else
     vlog "跳过 verify"
-  fi
-
-  if should_run_om; then
-    vlog "条件满足: 有 pending 运维任务"
-    trigger_job "pipeline-om-scan"
-  else
-    vlog "跳过 om"
   fi
 
   if should_run_a_verify_notify; then
