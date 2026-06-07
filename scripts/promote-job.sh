@@ -8,6 +8,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/job-paths.sh"
 # shellcheck source=lib/agent-boundary.sh
 source "${SCRIPT_DIR}/lib/agent-boundary.sh"
+# shellcheck source=lib/feishu-notify.sh
+source "${SCRIPT_DIR}/lib/feishu-notify.sh"
 load_env
 require_pipeline_agents "promote-job.sh" agent-a manual
 
@@ -48,3 +50,5 @@ if current == "draft":
 status_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(f"已入队: {data['id']} -> pending")
 PY
+
+feishu_notify_job_milestone "$JOB_DIR" "pending" || true

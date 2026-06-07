@@ -160,26 +160,13 @@ has_unprocessed_inbox() {
   return 1
 }
 
-has_unnotified_verify_paused() {
-  local f jobdir
-  while IFS= read -r f; do
-    [[ -n "$f" ]] || continue
-    jq -e '.status == "verify_paused"' "$f" >/dev/null 2>&1 || continue
-    jobdir="$(dirname "$f")"
-    [[ -f "${jobdir}/reports/verify-user-report.md" ]] || continue
-    [[ -f "${jobdir}/reports/.verify-paused-notified" ]] && continue
-    return 0
-  done < <(each_status_json)
-  return 1
-}
-
 should_run_feedback() {
   has_feedback_sources || return 1
   ! agent_cron_busy "agent-feedback"
 }
 
 should_run_a_feedback() {
-  has_unprocessed_inbox || has_unnotified_verify_paused || return 1
+  has_unprocessed_inbox || return 1
   ! agent_cron_busy "agent-a"
 }
 
@@ -233,6 +220,10 @@ trigger_job() {
 }
 
 run_dispatch() {
+  if [[ "$DRY_RUN" != 1 ]]; then
+    "${SCRIPT_DIR}/feishu-notify-scan.sh" 2>/dev/null || true
+  fi
+
   if should_run_design; then
     if has_stuck_design_job; then
       vlog "条件满足: designing 卡死（无 design/DESIGN.md 且 agent-design 未在跑）"
@@ -309,14 +300,10 @@ run_dispatch() {
   fi
 
   if should_run_a_feedback; then
-    if has_unnotified_verify_paused; then
-      vlog "条件满足: verify_paused 待通知用户且 agent-a 未在跑"
-    else
-      vlog "条件满足: feedback/inbox 有未处理 md 且 agent-a 未在跑"
-    fi
+    vlog "条件满足: feedback/inbox 有未处理 md 且 agent-a 未在跑"
     trigger_job "pipeline-a-feedback-digest"
   else
-    if ( has_unprocessed_inbox || has_unnotified_verify_paused ) && agent_cron_busy "agent-a"; then
+    if has_unprocessed_inbox && agent_cron_busy "agent-a"; then
       vlog "跳过 a-feedback-digest: agent-a 正在运行"
     else
       vlog "跳过 a-feedback-digest"

@@ -9,6 +9,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/job-paths.sh"
 # shellcheck source=lib/agent-boundary.sh
 source "${SCRIPT_DIR}/lib/agent-boundary.sh"
+# shellcheck source=lib/feishu-notify.sh
+source "${SCRIPT_DIR}/lib/feishu-notify.sh"
 load_env
 require_pipeline_agents "complete-verify.sh" agent-verifier verify-chain manual
 
@@ -283,12 +285,21 @@ main() {
 
   apply_status "$job_dir" "$phase" "$overall" "$runtime_v" "$verify_v" || true
 
-  if [[ -f "${job_dir}/status.json" ]] \
-    && [[ "$(jq -r '.status' "${job_dir}/status.json")" == "verify_paused" ]]; then
-    local max_r paused_round
-    paused_round="$(jq -r '.verifyRound' "${job_dir}/status.json")"
-    max_r="$(jq -r '.maxVerifyRounds' "${job_dir}/status.json")"
-    write_verify_user_report "$job_dir" "$paused_round" "$max_r" "$runtime_v" "$verify_v"
+  if [[ -f "${job_dir}/status.json" ]]; then
+    local final_status
+    final_status="$(jq -r '.status' "${job_dir}/status.json")"
+    case "$final_status" in
+      verified)
+        feishu_notify_job_milestone "$job_dir" "verified" || true
+        ;;
+      verify_paused)
+        local max_r paused_round
+        paused_round="$(jq -r '.verifyRound' "${job_dir}/status.json")"
+        max_r="$(jq -r '.maxVerifyRounds' "${job_dir}/status.json")"
+        write_verify_user_report "$job_dir" "$paused_round" "$max_r" "$runtime_v" "$verify_v"
+        feishu_notify_job_milestone "$job_dir" "verify_paused" || true
+        ;;
+    esac
   fi
 }
 

@@ -10,6 +10,8 @@ source "${SCRIPT_DIR}/lib/job-paths.sh"
 source "${SCRIPT_DIR}/lib/om-tasks.sh"
 # shellcheck source=lib/agent-boundary.sh
 source "${SCRIPT_DIR}/lib/agent-boundary.sh"
+# shellcheck source=lib/feishu-notify.sh
+source "${SCRIPT_DIR}/lib/feishu-notify.sh"
 load_env
 require_pipeline_agents "om-task-complete.sh" agent-om manual
 
@@ -90,6 +92,8 @@ status_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", en
 print(f"OK: {task_id} -> {status}")
 print(f"report: {report}")
 PY
+
+  feishu_notify_om_task "$project" "$task_id" "$status" "$summary" || true
 }
 
 main "$@"

@@ -17,7 +17,8 @@
 | **运维分离** | agent-a **不下场** docker / 日志；通过 `om-task-create` 下发 MD 任务单 → **agent-om** 执行；运维发现代码缺陷同样 `report-bug.sh` → coder |
 | **飞书网关** | agent-a 所有 exec 经 **`agent-a-run.sh` 白名单**；查进度用 `job-status.sh`，保证飞书响应速度 |
 | **脚本门禁** | `PIPELINE_BOUNDARY_STRICT=1` 时关键脚本校验 `PIPELINE_AGENT`，防 Agent 越界 |
-| **失败回流** | 默认自动 **10 轮**；超限 → `verify_paused` + 飞书报告，用户决定 `continue-verify.sh` |
+| **失败回流** | 默认自动 **10 轮**；超限 → `verify_paused` + **飞书主动推送**，用户决定 `continue-verify.sh` |
+| **里程碑推送** | `feishu-notify-scan.sh` + 脚本钩子：`pending` / `design_done` / `impl_done` / `verified` / `verify_paused` / `delivered` / 运维任务完成 |
 | **迁移** | 旧 job 在编排仓库内：`./scripts/migrate-job-layout.sh` |
 
 **状态机**（工作区 `status.json`）：
@@ -213,7 +214,8 @@ journalctl --user -u pipeline-cron-dispatch.service -n 20
 | `continue-verify.sh` | 用户同意继续：再自动跑 N 轮（默认 10） |
 | `cron-dispatch.sh` | 读 status / ops/inbox 触发各阶段 Cron |
 | `verify-pipeline.sh` | Docker compose 构建部署、健康探活 |
-| `complete-verify.sh` | 验证报告 → `verified` / `fix_needed` / `verify_failed` |
+| `complete-verify.sh` | 验证报告 → `verified` / `fix_needed` / `verify_paused`（并触发飞书推送） |
+| `feishu-notify-scan.sh` | 扫描工作区里程碑，经 `openclaw message send` 主动推飞书（需 `FEISHU_NOTIFY_TARGET`） |
 | `claude-pipeline.sh` | Claude Code：`implement` / `verify` / `verify-fix` / `resume` |
 | `migrate-job-layout.sh` | 旧 job 目录迁移到 pipeline-workspace |
 | `install-docker.sh` | Docker 安装（验证必需） |

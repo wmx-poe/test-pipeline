@@ -573,6 +573,26 @@ openclaw pairing list feishu
 openclaw pairing approve feishu <CODE>
 ```
 
+### 里程碑主动推送（无需轮询问进度）
+
+在 `config/.env` 设置接收人（配对用户的 open_id）：
+
+```bash
+export FEISHU_NOTIFY_TARGET="user:ou_xxxxxxxx"
+# export FEISHU_NOTIFY_ENABLED=0   # 关闭推送
+```
+
+以下节点会经 `openclaw message send` **主动推飞书**（确定性脚本，不耗 LLM）：
+
+| 节点 | 触发方式 |
+|------|----------|
+| `pending` | `promote-job.sh` 入队后 |
+| `design_done` / `impl_done` / `verified` / `delivered` | `cron-dispatch.sh` 每分钟扫描 |
+| `verify_paused` | `complete-verify.sh` 达轮次上限后 |
+| 运维任务 done/failed | `om-task-complete.sh` |
+
+去重：各 job 的 `reports/.feishu-notified-<milestone>` 标记文件。
+
 ### 绑定 Agent A
 
 默认 `config/openclaw.json5` 已将全部飞书 `default` 账号路由到 `agent-a`。
