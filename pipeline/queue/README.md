@@ -13,7 +13,7 @@
 | `verifying` | 进行中 | agent-verifier（先 verify-pipeline + Claude verify） |
 | `verified` | verify PASS + deploy-info | 交付 → `<project>/delivered/` |
 | `fix_needed` | verify FAIL，待修复 | agent-coder 读 verify-feedback.md |
-| `verify_failed` | 超过 maxVerifyRounds | 人工介入 |
+| `verify_paused` | 本轮 10 次验证均未通过 | agent-a 通知用户，continue-verify |
 | `delivered` | `pipeline-workspace/<project>/delivered/` | agent-feedback 定期扫描 |
 
 Agent A 通过 `skills/brainstorming/SKILL.md` 完成需求分析，写入 workspace 内 `spec.md`；用户批准后 `status` 从 `draft` 变为 `pending`。
@@ -23,9 +23,12 @@ Agent A 通过 `skills/brainstorming/SKILL.md` 完成需求分析，写入 works
 ```
 test-pipeline/pipeline/jobs/<job-id>/job.md     # 指针（仅此文件）
 pipeline-workspace/<project>/
-  jobs/<job-id>/          # spec, status, design, src, reports
-  delivered/<job-id>/     # 验证通过后复制
-  feedback/             # raw, inbox, inbox/processed
+  jobs/<job-id>/          # spec, status, design, src, reports（进行中）
+  delivered/<job-id>/     # 验证通过后复制（与 jobs 平级）
+  feedback/               # raw, inbox, inbox/processed（与 delivered 平级）
+  ops/                    # agent-om 运维（与 delivered 平级）
+    tasks/                # agent-a 下发的任务单
+    reports/              # agent-om 执行报告
 ```
 
 验证与部署约定（Docker 运行时验证、失败回流 coder）：[docs/VERIFICATION.md](../../docs/VERIFICATION.md)

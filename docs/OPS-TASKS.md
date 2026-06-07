@@ -34,9 +34,13 @@ PIPELINE_AGENT=agent-a ./scripts/om-task-create.sh <project> \
 ## 目录
 
 ```
-pipeline-workspace/<project>/ops/
-  tasks/om-YYYYMMDD-HHMMSS-*.md
-  reports/om-YYYYMMDD-HHMMSS-*.md
+pipeline-workspace/<project>/
+  jobs/<job-id>/          # 进行中任务
+  delivered/<job-id>/     # 验证交付（agent-verifier 复制）
+  feedback/               # 反馈扫描（agent-feedback → agent-a）
+  ops/                    # 运维（agent-a 下发 → agent-om 执行，与 delivered 平级）
+    tasks/om-*.md
+    reports/om-*.md
 ```
 
 ## 本地验证 IP

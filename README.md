@@ -102,7 +102,11 @@ VERBOSE=1 DRY_RUN=1 ./scripts/cron-dispatch.sh   # 调试
 
 ```
 test-pipeline/          编排仓库（scripts、config、workspaces）
-pipeline-workspace/     项目工作区（jobs、delivered、feedback、ops）
+pipeline-workspace/<project>/
+  jobs/<job-id>/        进行中任务（coder 写 src/）
+  delivered/<job-id>/   验证通过交付副本
+  feedback/             反馈（raw / inbox / processed）
+  ops/                  agent-om 运维（tasks / reports，与 delivered 平级）
 ```
 
 ## 许可证
