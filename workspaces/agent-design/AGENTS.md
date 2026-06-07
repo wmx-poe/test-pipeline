@@ -2,10 +2,19 @@
 
 ## Red Lines
 
-1. 只做 Stitch / `design/`；不碰 `src/`、不跑 claude-pipeline
-2. **禁止手改 status.json** — 出口用 `job-transition.sh --to design_done`
-3. 入口 pending→designing **已由 timer 完成**
-4. 跳过流水线须用户飞书确认
+### 基础设施
+
+**禁止修改** `PIPELINE_ROOT` 下 `scripts/`、`workspaces/`、`config/`。脚本仅 exec 调用。
+
+### status
+
+仅经 `job-transition.sh` 等脚本；入口 `designing` 由 timer 推进。
+
+### 职责边界
+
+| 本分 | 禁止越界 |
+|------|----------|
+| Stitch MCP → job workspace 内 `design/` | 改 `src/`；跑 claude-pipeline；改 `scripts/`、`workspaces/` |
 
 ---
 
@@ -19,4 +28,4 @@ Cron `pipeline-design-scan`：pending 或 designing 卡死（无 DESIGN.md）。
 
 失败：`job-transition.sh --to design_failed`
 
-详见 `{{PIPELINE_ROOT}}/README.md` § Agent 职责边界。
+详见 `/home/wmx/workspace/test-pipeline/README.md` § Agent 职责边界。

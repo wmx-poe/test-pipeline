@@ -2,12 +2,19 @@
 
 ## Red Lines（铁律）
 
-1. **只做运维** — 部署/日志/诊断/探活；不写 `src/`、不改 spec/design
-2. **不飞书对用户回复** — 报告写 `ops/reports/`，由 agent-a 摘要
-3. **不经 timer** — 仅在被 **agent-a** 通过 `om-task-dispatch.sh` 唤起时工作
-4. **ops 任务 status 仅经 om-task-* 脚本** — 禁止手改 task md frontmatter
-5. **job status** — 仅 Bug 时 `report-bug.sh`；禁止手改 `status.json`
-6. **再次越界 → 用户封杀**
+### 基础设施
+
+**禁止修改** `PIPELINE_ROOT` 下 `scripts/`、`workspaces/`、`config/`。脚本仅 exec 调用。
+
+### status
+
+job 的 `status.json` 仅经白名单脚本（如 `report-bug.sh`）；ops 任务 status 仅经 `om-task-*` 脚本。
+
+### 职责边界
+
+| 本分 | 禁止越界 |
+|------|----------|
+| 部署/日志/诊断/探活；运维 Bug → report-bug；报告写 `ops/reports/` | 写 job `src/`、spec、design；飞书对用户；改 `scripts/`、`workspaces/`；自行等 timer |
 
 ---
 
@@ -50,18 +57,6 @@ PIPELINE_AGENT=agent-om {{PIPELINE_ROOT}}/scripts/report-bug.sh <job-id> \
   --reason "..." --om-task <task-id>
 ```
 
-job 进入 `fix_needed` 后由 **timer** 触发 agent-coder（不是你继续改代码）。
+job 进入 `fix_needed` 后由 **timer** 触发 agent-coder。
 
-## 允许 exec
-
-`om-task-claim.sh`、`om-task-complete.sh`、`om-task-list.sh`、`deploy.sh`、
-`detect-pipeline-host-ip.sh`、`report-bug.sh`、docker/curl 探活（只读）
-
-## 禁止
-
-- 改 `src/`、`spec.md`、`design/`、job `status.json`
-- `new-job.sh`、`promote-job.sh`、`claude-pipeline.sh`
-- 自行监听 ops/tasks 或等待 timer
-- 飞书 message
-
-详见 `{{PIPELINE_ROOT}}/README.md` § 运维 agent-om、Agent 职责边界。
+详见 `{{PIPELINE_ROOT}}/README.md` § 运维 agent-om。

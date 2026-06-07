@@ -90,55 +90,31 @@
         name: "需求编排 Agent A",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-a",
         identity: { name: "Agent A" },
-        tools: {
-          allow: ["read", "write", "edit", "exec", "message", "sessions_list", "sessions_history"],
-          deny: ["cron"],
-        },
       },
       {
         id: "agent-design",
         name: "设计 Stitch",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-design",
-        tools: {
-          allow: ["read", "write", "edit", "exec"],
-          deny: ["cron", "message"],
-        },
       },
       {
         id: "agent-coder",
         name: "Claude Code 实现",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-coder",
-        tools: {
-          allow: ["read", "write", "edit", "exec"],
-          deny: ["cron", "message"],
-        },
       },
       {
         id: "agent-verifier",
         name: "Claude Code 验证",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-verifier",
-        tools: {
-          allow: ["read", "write", "edit", "exec", "message"],
-          deny: ["cron"],
-        },
       },
       {
         id: "agent-om",
         name: "运维 Agent OM",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-om",
-        tools: {
-          allow: ["read", "write", "edit", "exec"],
-          deny: ["cron", "message"],
-        },
       },
       {
         id: "agent-feedback",
         name: "反馈扫描",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-feedback",
-        tools: {
-          allow: ["read", "write", "edit", "exec"],
-          deny: ["cron", "message"],
-        },
       },
     ],
   },

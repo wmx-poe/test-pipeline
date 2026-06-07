@@ -21,7 +21,6 @@ status_infer_from_artifacts() {
   local job_dir="$1"
   local cur="$2"
 
-  [[ -f "${job_dir}/reports/verify.md" ]] && [[ "$cur" == "verifying" || "$cur" == "implementing" ]] && { echo "impl_done"; return; }
   [[ -f "${job_dir}/reports/implement-summary.md" ]] && [[ "$cur" == "implementing" ]] && { echo "impl_done"; return; }
   [[ -f "${job_dir}/design/DESIGN.md" ]] && [[ "$cur" == "designing" ]] && { echo "design_done"; return; }
   [[ -f "${job_dir}/spec.md" ]] && [[ "$cur" == "draft" ]] && grep -q '{{TITLE}}' "${job_dir}/spec.md" 2>/dev/null && { echo "draft"; return; }
@@ -81,7 +80,8 @@ if cur not in valid:
     data.setdefault("_statusRepair", {})
     data["_statusRepair"]["previous"] = cur
     data["_statusRepair"]["at"] = now
-    data["status"] = "draft"
+    cur = "draft"
+data["status"] = cur
 
 path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
@@ -91,7 +91,7 @@ PY
 
   # 产物推断（仅当 status 与产物明显矛盾时修正）
   local cur inferred
-  cur="$(status_json_field "$status_file" status)"
+  cur="$(jq -r '.status // "draft"' "$status_file" 2>/dev/null || echo draft)"
   inferred="$(status_infer_from_artifacts "$job_dir" "$cur")"
   if [[ "$inferred" != "$cur" ]]; then
     python3 - "$status_file" "$cur" "$inferred" "$now" <<'PY'

@@ -16,8 +16,8 @@ description: "收到新功能/改版/实现类需求时 MUST 先加载本 skill�
 
 ## 产出路径
 
-- 任务索引：`{{PIPELINE_ROOT}}/pipeline/jobs/<job-id>/job.md`（指针，含 workspace 路径）
-- 任务工作区：`{{WORKSPACE_ROOT}}/<project>/jobs/<job-id>/`（实际内容）
+- 任务索引：`/home/wmx/workspace/test-pipeline/pipeline/jobs/<job-id>/job.md`（指针，含 workspace 路径）
+- 任务工作区：`/home/wmx/workspace/pipeline-workspace/<project>/jobs/<job-id>/`（实际内容）
 - 规格文件：workspace 内 `spec.md`（按 `pipeline/jobs/_template/spec.md` 结构）
 - 状态文件：workspace 内 `status.json`
   - 头脑风暴进行中：`status: "draft"`
@@ -33,23 +33,23 @@ description: "收到新功能/改版/实现类需求时 MUST 先加载本 skill�
 4. **方案对比** — 给出 2–3 种方案、权衡与推荐（写在飞书摘要中，最终写入 spec）
 5. **呈现设计** — 按复杂度分节（架构、组件、数据流、错误处理、测试）；每节后询问是否 OK
 6. **写入 spec.md** — 写入 **workspace** 内（见下方「落盘步骤」），填完整模板各节
-7. **校验** — 运行 `{{PIPELINE_ROOT}}/scripts/validate-spec.sh <job-id>`；失败则修正后重跑
+7. **校验** — 运行 `/home/wmx/workspace/test-pipeline/scripts/validate-spec.sh <job-id>`；失败则修正后重跑
 8. **自检** — 扫描 TBD/矛盾/歧义/范围过大，当场修正
 9. **用户审阅** — 飞书发送 spec 摘要 + job-id + project，请用户确认或修改
-10. **入队** — 用户批准后运行 `{{PIPELINE_ROOT}}/scripts/promote-job.sh <job-id>`，再 `read` workspace 内 `status.json` 确认 `status=pending`
+10. **入队** — 用户批准后运行 `/home/wmx/workspace/test-pipeline/scripts/promote-job.sh <job-id>`，再 `read` workspace 内 `status.json` 确认 `status=pending`
 
 ## 落盘步骤（MUST，不可跳过）
 
 ```bash
 # 1) 创建 draft（写指针 + workspace）
-{{PIPELINE_ROOT}}/scripts/new-job.sh "任务标题"
+/home/wmx/workspace/test-pipeline/scripts/new-job.sh "任务标题"
 
 # 2) 读 job.md 获取 workspace 路径，写入 spec.md（write/edit/exec — 禁止只在飞书发文字）
 # 3) 校验
-{{PIPELINE_ROOT}}/scripts/validate-spec.sh <job-id>
+/home/wmx/workspace/test-pipeline/scripts/validate-spec.sh <job-id>
 
 # 4) 用户批准后再入队
-{{PIPELINE_ROOT}}/scripts/promote-job.sh <job-id>
+/home/wmx/workspace/test-pipeline/scripts/promote-job.sh <job-id>
 ```
 
 **终点是 `status=pending`，不是实现。** 实现由 agent-design / agent-coder / agent-verifier 负责。

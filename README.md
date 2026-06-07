@@ -35,7 +35,8 @@
 | 4 | 所有 status 读写带 **容错**（`status-integrity.sh`） |
 | 5 | **job status 仅 timer + 白名单脚本** 修改；OpenClaw 禁止手改 |
 | 6 | Bug / 同需求修复 **不开新 job**；仅新需求 `new-job.sh` |
-| 7 | 跳过流水线规则 **须飞书与用户确认**（`PIPELINE_USER_OVERRIDE=1`） |
+| 7 | 其他跳过流水线约定 **须飞书与用户确认**（`PIPELINE_USER_OVERRIDE=1`）；**status 不可手改** |
+| 8 | **禁止 Agent 修改**编排仓库 `scripts/`、`workspaces/`、`config/`（只读 exec 调用脚本） |
 
 ---
 
@@ -373,22 +374,18 @@ agent-om 发现代码缺陷 → `report-bug.sh` → job `fix_needed` → **timer
 
 ## Agent 职责边界
 
-OpenClaw 各 Agent **只负责各自部分，禁止越界**。
+OpenClaw 各 Agent **职责分工界限分明，禁止越界**。工具（read/write/edit/exec/cron/message）不受限，但**不得修改**编排仓库 `scripts/`、`workspaces/`、`config/`；**status 须经脚本**（见 § 核心规则 #5、#8）。
 
-| Agent | 职责 | 禁止 |
-|-------|------|------|
-| **agent-a** | 飞书入口；需求设计；分流 Bug/反馈/运维 | 写 `src/`；手改 status；代跑 verify/implement |
-| **agent-om** | 部署/日志/诊断；运维 Bug | 写 `src/`；飞书对用户；timer 扫描 |
-| **agent-design** | Stitch → `design/` | 改 `src/`；claude-pipeline |
-| **agent-coder** | `src/` 实现与修复 | verify；标 verified |
-| **agent-verifier** | 运行时验证 + 交付 | 改 `src/` |
-| **agent-feedback** | delivered/raw → inbox | 改 status；new-job；飞书回复 |
+| Agent | 职责 | 禁止越界 |
+|-------|------|----------|
+| **agent-a** | 飞书入口；需求 brainstorming → spec；分流 Bug/反馈/运维；汇总报告 | 写 job `src/`、`design/`；手改 status；代跑 implement/verify/Stitch |
+| **agent-om** | 部署/日志/诊断；运维 Bug → report-bug | 写 job `src/`、spec、design；飞书对用户；改 `scripts/`、`workspaces/` |
+| **agent-design** | Stitch → job `design/` | 改 `src/`；claude-pipeline；改 `scripts/`、`workspaces/` |
+| **agent-coder** | job `src/` 实现与修复 | verify；report-bug；改 `scripts/`、`workspaces/` |
+| **agent-verifier** | 运行时验证 + 交付 | 改 job `src/`；改 `scripts/`、`workspaces/` |
+| **agent-feedback** | delivered/raw → inbox | 改 status；new-job；飞书回复；改 `scripts/`、`workspaces/` |
 
-跳过流水线须用户飞书确认 + `PIPELINE_USER_OVERRIDE=1`：
-
-- 手改 `status.json`
-- 直接 `openclaw cron run` 跳过 dispatch
-- 未授权脚本改状态
+`PIPELINE_USER_OVERRIDE=1` 时可与用户确认后跳过**非 status、非基础设施** 类约定；**不得**手改 `status.json`，**不得**改 `scripts/`、`workspaces/`。
 
 ---
 
@@ -396,11 +393,10 @@ OpenClaw 各 Agent **只负责各自部分，禁止越界**。
 
 **全局禁止（所有 Agent）**
 
-- 修改 `scripts/`、`config/`、`README.md` 等流水线基础设施（Agent 禁止改）
+- **修改编排仓库** `scripts/`、`workspaces/`、`config/`、`README.md` 等（脚本只读 exec 调用）
 - 泄露 `config/.env`、API Key、SSH 密钥
 - 删库、关服、未授权 force push
-
-**agent-a**：exec 仅只读诊断 + 白名单脚本；禁止 `bash -c` / `python -c` 自写脚本改文件。
+- **手改 job `status.json` 或 ops task frontmatter**（须走脚本，见 § 核心规则 #5）
 
 **运维报告**：摘要给用户时脱敏 token、密码、敏感内网 IP。
 

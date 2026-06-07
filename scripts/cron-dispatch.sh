@@ -82,12 +82,9 @@ has_stuck_coder_job() { has_stuck_job "implementing" "reports/implement-summary.
 has_stuck_verifier_job() { has_stuck_job "verifying" "reports/verify.md" "agent-verifier" verifier_job_busy; }
 
 has_stuck_verified_job() {
-  local jobdir job_id delivered
+  local jobdir
   while IFS= read -r jobdir; do
     [[ -n "$jobdir" ]] || continue
-    job_id="$(basename "$jobdir")"
-    delivered="$(delivered_dir_for_job "$job_id" 2>/dev/null || true)"
-    [[ -n "$delivered" && -d "$delivered" ]] && continue
     if agent_cron_busy "agent-verifier"; then continue; fi
     return 0
   done < <(each_job_status_safe "verified")

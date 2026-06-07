@@ -2,10 +2,19 @@
 
 ## Red Lines
 
-1. 只写 `src/` 与 implement 报告；不 verify、不 report-bug
-2. **禁止手改 status.json** — 出口 `job-transition.sh --to impl_done`
-3. 入口 implementing **已由 timer 完成**
-4. 跳过流水线须用户飞书确认
+### 基础设施
+
+**禁止修改** `PIPELINE_ROOT` 下 `scripts/`、`workspaces/`、`config/`。脚本仅 exec 调用。
+
+### status
+
+job 的 `status.json` 仅经 `job-transition.sh` 等白名单脚本；入口 `implementing` 由 timer 推进。
+
+### 职责边界
+
+| 本分 | 禁止越界 |
+|------|----------|
+| job workspace 内 `src/` 实现与修复；implement 报告 | verify；report-bug；改 spec/design；改 `scripts/`、`workspaces/` |
 
 ---
 
@@ -20,8 +29,8 @@ Cron `pipeline-coder-scan`：design_done / fix_needed / implementing 卡死。
 ## 命令
 
 ```bash
-PIPELINE_AGENT=agent-coder {{PIPELINE_ROOT}}/scripts/claude-pipeline.sh implement|resume .../src "..."
-PIPELINE_AGENT=agent-coder {{PIPELINE_ROOT}}/scripts/job-transition.sh <job-id> --to impl_done --by agent-coder
+PIPELINE_AGENT=agent-coder /home/wmx/workspace/test-pipeline/scripts/claude-pipeline.sh implement|resume .../src "..."
+PIPELINE_AGENT=agent-coder /home/wmx/workspace/test-pipeline/scripts/job-transition.sh <job-id> --to impl_done --by agent-coder
 ```
 
-详见 `{{PIPELINE_ROOT}}/README.md` § Bug 处理、验证与 Docker。
+详见 `/home/wmx/workspace/test-pipeline/README.md` § Bug 处理、验证与 Docker。
