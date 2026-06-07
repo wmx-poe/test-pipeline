@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/job-paths.sh
 source "${SCRIPT_DIR}/lib/job-paths.sh"
+# shellcheck source=lib/status-integrity.sh
+source "${SCRIPT_DIR}/lib/status-integrity.sh"
 load_env
 
 require_cmd openclaw
@@ -47,7 +49,7 @@ has_stuck_job() {
     if agent_cron_busy "$agent_id"; then continue; fi
     if [[ -n "$sub_busy_fn" ]] && "$sub_busy_fn" "$jobdir"; then continue; fi
     return 0
-  done < <(each_job_status "$status")
+  done < <(each_job_status_trusted "$status")
   return 1
 }
 
@@ -81,19 +83,19 @@ has_stuck_verifier_job() {
     if verifier_job_busy "$jobdir"; then continue; fi
     # verifying 且 agent/子进程均未在跑 → 卡死（含已有 verify.md 但 status 未推进）
     return 0
-  done < <(each_job_status "verifying")
+  done < <(each_job_status_trusted "verifying")
   return 1
 }
 
 # 有 verifying 任务且 agent / claude 子进程正在跑（占 Docker 端口，阻塞并行 verify）
 is_verifying_in_flight() {
-  has_job_status verifying || return 1
+  has_job_status_trusted verifying || return 1
   if agent_cron_busy "agent-verifier"; then return 0; fi
   local jobdir
   while IFS= read -r jobdir; do
     [[ -n "$jobdir" ]] || continue
     if verifier_job_busy "$jobdir"; then return 0; fi
-  done < <(each_job_status "verifying")
+  done < <(each_job_status_trusted "verifying")
   return 1
 }
 
@@ -107,24 +109,60 @@ has_stuck_verified_job() {
     [[ -n "$delivered" && -d "$delivered" ]] && continue
     if agent_cron_busy "agent-verifier"; then continue; fi
     return 0
-  done < <(each_job_status "verified")
+  done < <(each_job_status_trusted "verified")
   return 1
 }
 
+# timer 入口推进：仅经 job-transition.sh，且 status 须通过 integrity 校验
+advance_design_entries() {
+  local jobdir job_id
+  while IFS= read -r jobdir; do
+    [[ -n "$jobdir" ]] || continue
+    job_id="$(basename "$jobdir")"
+    if ! "${SCRIPT_DIR}/validate-spec.sh" "$job_id" >/dev/null 2>&1; then
+      vlog "跳过 pending→designing: ${job_id} spec 未通过 validate-spec"
+      continue
+    fi
+    PIPELINE_DISPATCH=1 "${SCRIPT_DIR}/job-transition.sh" "$job_id" --to designing \
+      --note "cron-dispatch entry" || vlog "pending→designing 失败: ${job_id}"
+  done < <(each_job_status_trusted "pending")
+}
+
+advance_coder_entries() {
+  local jobdir job_id
+  while IFS= read -r jobdir; do
+    [[ -n "$jobdir" ]] || continue
+    job_id="$(basename "$jobdir")"
+    PIPELINE_DISPATCH=1 "${SCRIPT_DIR}/job-transition.sh" "$job_id" --to implementing \
+      --note "cron-dispatch entry (design_done)" || vlog "design_done→implementing 失败: ${job_id}"
+  done < <(each_job_status_trusted "design_done")
+  while IFS= read -r jobdir; do
+    [[ -n "$jobdir" ]] || continue
+    job_id="$(basename "$jobdir")"
+    PIPELINE_DISPATCH=1 "${SCRIPT_DIR}/job-transition.sh" "$job_id" --to implementing \
+      --note "cron-dispatch entry (fix_needed)" || vlog "fix_needed→implementing 失败: ${job_id}"
+  done < <(each_job_status_trusted "fix_needed")
+}
+
+advance_verify_entries() {
+  local jobdir job_id
+  while IFS= read -r jobdir; do
+    [[ -n "$jobdir" ]] || continue
+    job_id="$(basename "$jobdir")"
+    PIPELINE_DISPATCH=1 "${SCRIPT_DIR}/job-transition.sh" "$job_id" --to verifying \
+      --note "cron-dispatch entry" || vlog "impl_done→verifying 失败: ${job_id}"
+  done < <(each_job_status_trusted "impl_done")
+}
+
 should_run_design() {
-  if has_job_status pending && ! has_job_status designing; then
-    return 0
-  fi
+  # advance_design_entries 已将可信 pending→designing；此处只判断 designing / 卡死
+  has_job_status_trusted designing && return 0
   has_stuck_design_job
 }
 
 should_run_coder() {
-  if has_job_status fix_needed && ! has_job_status implementing; then
-    return 0
-  fi
-  if has_job_status design_done && ! has_job_status implementing; then
-    return 0
-  fi
+  # advance_coder_entries 已将 design_done|fix_needed→implementing
+  has_job_status_trusted implementing && return 0
   has_stuck_coder_job
 }
 
@@ -132,11 +170,9 @@ should_run_verify() {
   if has_stuck_verifier_job || has_stuck_verified_job; then
     return 0
   fi
-  # impl_done 仅在无「进行中的 verify」时入队；verifying 但已空闲视为卡死（见上）
-  if has_job_status impl_done && ! is_verifying_in_flight; then
-    return 0
-  fi
-  return 1
+  # advance_verify_entries 已将 impl_done→verifying
+  has_job_status_trusted verifying || return 1
+  ! is_verifying_in_flight
 }
 
 has_feedback_sources() {
@@ -224,15 +260,21 @@ run_dispatch() {
     "${SCRIPT_DIR}/feishu-notify-scan.sh" 2>/dev/null || true
   fi
 
+  if [[ "$DRY_RUN" != 1 ]]; then
+    advance_design_entries
+    advance_coder_entries
+    advance_verify_entries
+  fi
+
   if should_run_design; then
     if has_stuck_design_job; then
       vlog "条件满足: designing 卡死（无 design/DESIGN.md 且 agent-design 未在跑）"
     else
-      vlog "条件满足: pending 且尚无 designing"
+      vlog "条件满足: 有可信 designing 任务"
     fi
     trigger_job "pipeline-design-scan"
   else
-    if has_job_status designing && agent_cron_busy "agent-design"; then
+    if has_job_status_trusted designing && agent_cron_busy "agent-design"; then
       vlog "跳过 design: agent-design 正在运行"
     else
       vlog "跳过 design: 无 pending / designing 未卡死"
@@ -240,16 +282,14 @@ run_dispatch() {
   fi
 
   if should_run_coder; then
-    if has_job_status fix_needed; then
-      vlog "条件满足: fix_needed（验证失败待 coder 修复）"
-    elif has_stuck_coder_job; then
+    if has_stuck_coder_job; then
       vlog "条件满足: implementing 卡死（无 implement-summary 且 claude 未在跑）"
     else
-      vlog "条件满足: design_done 且尚无 implementing"
+      vlog "条件满足: 有可信 implementing 任务"
     fi
     trigger_job "pipeline-coder-scan"
   else
-    if has_job_status implementing && agent_cron_busy "agent-coder"; then
+    if has_job_status_trusted implementing && agent_cron_busy "agent-coder"; then
       vlog "跳过 coder: agent-coder 正在运行"
     else
       vlog "跳过 coder"
@@ -261,8 +301,8 @@ run_dispatch() {
       vlog "条件满足: verified 卡死（未登记 delivered 且 agent-verifier 未在跑）"
     elif has_stuck_verifier_job; then
       vlog "条件满足: verifying 卡死（agent/claude 未在跑，含 verify.md 已写但 status 未推进）"
-    elif has_job_status impl_done; then
-      vlog "条件满足: impl_done 且无进行中的 verify"
+    elif has_job_status_trusted verifying; then
+      vlog "条件满足: 有可信 verifying 任务且无进行中的 verify"
     fi
     trigger_job "pipeline-verify-scan"
   else

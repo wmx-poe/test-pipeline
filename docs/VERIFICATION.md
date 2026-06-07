@@ -91,18 +91,18 @@ Prompt 必须要求阅读 `verify-runtime.md`；**综合运行时 + 静态审查
 
 当 `status === fix_needed`（验证 FAIL、用户 Bug 或 **运维 Bug**）：
 
-1. 读 `reports/bugs.md`（含 agent-om 条目时对照 `<project>/ops/reports/*.md`）、`reports/verify-feedback.md`、`verify.md`、`verify-runtime.md`
-2. `status` → `implementing`
-3. 用 `claude-pipeline.sh resume` 或 `implement` 修复 **全部阻塞项**
-4. 修复后重新运行测试；更新 `reports/implement-summary.md`（注明本轮 fix 摘要）
-5. `status` → `impl_done`（等待 verifier 重新验证）
+1. **timer** 经 `job-transition.sh` 将 `fix_needed→implementing`（Agent **禁止**手改）
+2. 读 `reports/bugs.md`（含 agent-om 条目时对照 `<project>/ops/reports/*.md`）、`reports/verify-feedback.md`、`verify.md`、`verify-runtime.md`
+3. 用 `claude-pipeline.sh resume` 修复 **全部阻塞项**
+4. 更新 `reports/implement-summary.md`（注明本轮 fix 摘要）
+5. `job-transition.sh --to impl_done`（等待 verifier 重新验证）
 
 ## 状态机补充
 
 ```
-impl_done → verifying → (PASS) verified → delivered
-                    ↘ (FAIL, round≤10) fix_needed → implementing → impl_done → verifying …
-                    ↘ (FAIL, round>10) verify_paused → 用户决定 → continue-verify / verify_failed
+impl_done ──timer──► verifying → (PASS) verified → delivered
+                    ↘ (FAIL, round≤10) fix_needed ──timer──► implementing → impl_done → …
+                    ↘ (FAIL, round>10) verify_paused → 用户决定 → continue-verify / job-transition→verify_failed
 ```
 
 | status | 含义 | 触发 Agent |

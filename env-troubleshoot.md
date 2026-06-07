@@ -78,9 +78,9 @@ OpenClaw 内 5 条 Cron **保持 `enabled: false`**，避免每分钟空跑 LLM�
 
 | 条件 | 触发的 job |
 |------|------------|
-| 存在 `pending` 且无 `designing` | `pipeline-design-scan` |
-| 存在 `design_done` 或 `fix_needed` 且无 `implementing` | `pipeline-coder-scan` |
-| 存在 `impl_done` 且无 `verifying` | `pipeline-verify-scan` |
+| 可信 `pending`（经 validate-spec）→ dispatch 推进 `designing` | `pipeline-design-scan` |
+| 可信 `design_done`/`fix_needed` → dispatch 推进 `implementing` | `pipeline-coder-scan` |
+| 可信 `impl_done` → dispatch 推进 `verifying` | `pipeline-verify-scan` |
 | `WORKSPACE_ROOT/*/delivered/` 或 `*/feedback/raw/` 有内容 | `pipeline-feedback-scan` |
 | `WORKSPACE_ROOT/*/feedback/inbox/*.md` 存在 | `pipeline-a-feedback-digest` |
 

@@ -37,12 +37,12 @@ EOF
   esac
 done
 
-SCAN_DESIGN="扫描 pipeline/jobs/*/job.md 指向的工作区：① status=pending → validate-spec 通过后更新 designing，用 Stitch MCP 产出到 design/；② status=designing 但 design/DESIGN.md 不存在 → 视为卡死，重新设计。完成后 status=design_done。无任务则 NO_REPLY。"
-SCAN_CODER="扫描工作区：① status=design_done 或 fix_needed → implementing，用 claude-pipeline.sh 实现/修复。fix_needed 须先读 reports/bugs.md（含 agent-a 与 agent-om 登记的缺陷）和 reports/verify-feedback.md；运维 Bug 若引用 ops/reports/*.md 须一并阅读。② implementing 无 implement-summary → 卡死续跑。完成后 impl_done。无任务则 NO_REPLY。"
-SCAN_VERIFY="扫描工作区：① status=impl_done → claude-pipeline verify（内含 verify-pipeline + complete-verify 自动设 verified/fix_needed）；② verifying 但 verify.md 不存在 → 卡死重跑；③ verified 但未登记 delivered → 补交付。PASS 须含 deploy-info.md。无任务则 NO_REPLY。"
-SCAN_FEEDBACK="扫描 ${WORKSPACE_ROOT}/*/delivered 与 */feedback/raw，生成 */feedback/inbox/*.md。若上次扫描中断导致 inbox 未更新，且 raw/delivered 仍有待处理内容，重新扫描。无新内容则 NO_REPLY。"
-SCAN_A_FEEDBACK="读取 ${WORKSPACE_ROOT}/*/feedback/inbox 下未处理 md（不含 processed/），向用户摘要。verify_paused 等关键节点由 scripts/feishu-notify-scan.sh 主动推送，不在此扫描。无新反馈则 NO_REPLY。"
-SCAN_OM="扫描 ${WORKSPACE_ROOT}/*/ops/inbox/om-*.md：① pending 任务 om-task-claim → 按 type 执行 → om-task-complete 写 ops/reports/。② 若发现代码缺陷，对 jobId 调用 ${PIPELINE_ROOT}/scripts/report-bug.sh --by agent-om --om-task <id>，再 complete。③ running 卡死则续跑或 failed。禁止改 src/。无任务则 NO_REPLY。"
+SCAN_DESIGN="【铁律】非用户指令禁止越界；禁止手改 status.json。入口 pending→designing 已由 cron-dispatch/job-transition 完成。扫描 status=designing：validate-spec 已通过则用 Stitch MCP（仅本 Agent 可用）产出 design/；designing 无 DESIGN.md 为卡死续跑。完成后 PIPELINE_AGENT=agent-design job-transition.sh --to design_done。无任务 NO_REPLY。"
+SCAN_CODER="【铁律】非用户指令禁止越界；禁止 Stitch；禁止手改 status。入口 implementing 已由 dispatch 推进。扫描 status=implementing：用 claude-pipeline.sh implement/resume；fix_needed 须读 bugs.md+verify-feedback.md。完成后 job-transition.sh --to impl_done。无任务 NO_REPLY。"
+SCAN_VERIFY="【铁律】非用户指令禁止越界；禁止 Stitch；禁止手改 status。入口 verifying 已由 dispatch 推进。扫描 status=verifying：verify-pipeline + claude-pipeline verify；complete-verify 自动设 verified/fix_needed。verified 未 delivered 则补交付。无任务 NO_REPLY。"
+SCAN_FEEDBACK="【铁律】非用户指令禁止越界；禁止 Stitch；禁止改 status/spec/src。只写 feedback/inbox/*.md。扫描 delivered/raw，无新内容 NO_REPLY。"
+SCAN_A_FEEDBACK="【铁律】非用户指令禁止越界；禁止 Stitch；禁止手改 status。只处理 feedback/inbox digest（不含 processed/）。verify_paused 由 feishu-notify-scan 推送。无新反馈 NO_REPLY。"
+SCAN_OM="【铁律】非用户指令禁止越界；禁止 Stitch/claude-pipeline；禁止改 src/、手推 job 入口 status。只 exec om-task-* 与 report-bug.sh。ops/inbox pending→claim→complete；代码缺陷 report-bug 交 coder。无任务 NO_REPLY。"
 
 # 占位 schedule（job 为 disabled，不由 OpenClaw 定时触发）
 PLACEHOLDER_CRON="0 0 1 1 *"

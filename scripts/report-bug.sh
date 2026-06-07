@@ -125,7 +125,8 @@ if current != "fix_needed":
         "at": now,
         "from": current,
         "to": "fix_needed",
-        "by": by,
+        "by": "report-bug.sh",
+        "actor": by,
         "note": note,
     })
 

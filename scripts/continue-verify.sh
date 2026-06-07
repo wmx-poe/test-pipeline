@@ -68,7 +68,8 @@ history.append({
     "at": now,
     "from": current,
     "to": "fix_needed",
-    "by": by,
+    "by": "continue-verify.sh",
+    "actor": by,
     "note": f"用户同意继续验证，maxVerifyRounds={data['maxVerifyRounds']}",
 })
 data["status"] = "fix_needed"

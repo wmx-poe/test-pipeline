@@ -2,16 +2,24 @@
 
 流水线按 **Agent 分工** 运行：每个 OpenClaw Agent 只处理自己阶段的工作，**禁止越界**代做下游活。
 
+## 全局铁律（OpenClaw 必读）
+
+1. **非用户明确指令，禁止越界** — 不因「卡住/无人处理」自行代跑下游、手改 status、或 `openclaw cron run`
+2. **Timer + 状态机唯一路径** — `pipeline-cron-dispatch.timer` → `cron-dispatch.sh` → `pipeline-*-scan`；详见 [PIPELINE-SCHEDULING.md](PIPELINE-SCHEDULING.md)
+3. **状态变更只经脚本** — 入口状态（`pending→designing` 等）**仅 timer** 经 `job-transition.sh`；出口由各 Agent 经白名单脚本；**禁止**手 edit `status.json`
+4. **Stitch 仅 agent-design** — 其他 Agent 禁止调用 Stitch MCP（见 `config/openclaw.json5`）
+5. **dispatch 不信任手改 status** — `lib/status-integrity.sh` 校验 history + 产物后门禁
+
 ## 分工一览
 
 | Agent | 职责 | 可写目录/产物 | 禁止 |
 |-------|------|---------------|------|
 | **agent-a** | 飞书对话、需求/反馈/运维**下发** | `spec.md`、`ops/inbox/`（经 `agent-a-run.sh`） | docker/systemctl、改 `src/`、Stitch、验证 |
-| **agent-design** | Stitch UI 设计 | `design/`、`status`（designing→design_done） | 改 `src/`、`spec.md`（除门禁失败说明）、验证 |
-| **agent-coder** | 实现与修复 | `src/`、`reports/implement-summary.md`、`status`（implementing→impl_done） | 改 `design/`、标 `verified`、写 `verify.md` 结论 |
-| **agent-verifier** | 运行时验证与交付 | `reports/verify*.md`、`deploy-info.md`、`delivered/` | 改 `src/` 实现（Claude verify 只读） |
-| **agent-feedback** | 扫描交付与 raw 反馈 | `feedback/inbox/*.md` | 改 `spec`/`src`/`status`、调 `reopen-job` |
-| **agent-om** | 项目运维（部署/日志/诊断） | `<project>/ops/reports/*.md` | 改 `src/`、飞书回复、开 dev job |
+| **agent-design** | Stitch UI 设计 | `design/`；`job-transition.sh`（→design_done） | 改 `src/`、`spec.md`（除门禁失败说明）、验证、手改 status |
+| **agent-coder** | 实现与修复 | `src/`、`implement-summary.md`；`job-transition.sh`（→impl_done） | 改 `design/`、标 `verified`、Stitch、手改 status |
+| **agent-verifier** | 运行时验证与交付 | `reports/verify*.md`、`deploy-info.md`、`delivered/` | 改 `src/`、Stitch、手改 status |
+| **agent-feedback** | 扫描交付与 raw 反馈 | `feedback/inbox/*.md` | 改 `spec`/`src`/`status`、Stitch、调 `reopen-job` |
+| **agent-om** | 项目运维（部署/日志/诊断） | `<project>/ops/reports/*.md` | 改 `src/`、Stitch、飞书回复、手推入口 status |
 
 ## 硬隔离（配置层）
 
@@ -41,8 +49,11 @@
 | `claude-pipeline.sh verify` | agent-verifier, manual |
 | `verify-pipeline.sh` | agent-verifier, manual |
 | `complete-verify.sh` | agent-verifier, verify-chain, manual |
+| `job-transition.sh` | agent-design, agent-coder, agent-a（verify_paused→verify_failed）, cron-dispatch（`PIPELINE_DISPATCH=1`）, manual |
 
 `verify-chain`：由 `verify-pipeline.sh` / `claude-pipeline.sh verify` 内部设置 `PIPELINE_VERIFY_CHAIN=1` 时允许。
+
+**入口状态**（`pending→designing`、`design_done|fix_needed→implementing`、`impl_done→verifying`）**仅** `cron-dispatch.sh` 在 `PIPELINE_DISPATCH=1` 时调用 `job-transition.sh`。
 
 ### 调用方识别
 
@@ -73,19 +84,23 @@ export PIPELINE_BOUNDARY_STRICT=1   # 0=关闭脚本门禁
 ```bash
 PIPELINE_AGENT=agent-a {{PIPELINE_ROOT}}/scripts/reopen-job.sh job-xxx --reason "..." --by feishu-user
 PIPELINE_AGENT=agent-design {{PIPELINE_ROOT}}/scripts/validate-spec.sh job-xxx
+PIPELINE_AGENT=agent-design {{PIPELINE_ROOT}}/scripts/job-transition.sh job-xxx --to design_done
 PIPELINE_AGENT=agent-coder {{PIPELINE_ROOT}}/scripts/claude-pipeline.sh implement .../src "..."
+PIPELINE_AGENT=agent-coder {{PIPELINE_ROOT}}/scripts/job-transition.sh job-xxx --to impl_done
 PIPELINE_AGENT=agent-verifier {{PIPELINE_ROOT}}/scripts/claude-pipeline.sh verify .../src "..."
 ```
 
 ## 状态机与越界
 
 ```
-draft/pending ──agent-a──► spec 入队
-pending ──agent-design──► design_done
-design_done/fix_needed ──agent-coder──► impl_done
-impl_done ──agent-verifier──► verified | fix_needed
-fix_needed ──agent-coder──► impl_done（回流，非 verifier 修代码）
+draft ──agent-a/promote-job──► pending
+pending ──timer/job-transition──► designing ──agent-design──► design_done
+design_done ──timer/job-transition──► implementing ──agent-coder──► impl_done
+fix_needed ──timer/job-transition──► implementing ──agent-coder──► impl_done（回流）
+impl_done ──timer/job-transition──► verifying ──agent-verifier/complete-verify──► verified | fix_needed
 ```
+
+入口迁移（`pending→designing` 等）**仅** `cron-dispatch.sh` + `PIPELINE_DISPATCH=1`。详见 [PIPELINE-SCHEDULING.md](PIPELINE-SCHEDULING.md)。
 
 ## 需求 / 运维 / Bug 融合
 

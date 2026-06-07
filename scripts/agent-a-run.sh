@@ -18,6 +18,7 @@ agent-a 飞书会话中 **唯一** 允许的 exec 入口。禁止直接 docker/s
 允许脚本:
   job-status.sh, new-job.sh, promote-job.sh, validate-spec.sh,
   report-bug.sh, report-feedback.sh, reopen-job.sh, continue-verify.sh,
+  job-transition.sh,
   om-task-create.sh, om-task-list.sh, om-task-cancel.sh, deploy-servers-list.sh
 
 示例:
@@ -31,8 +32,11 @@ ALLOWED=(
   new-job.sh
   promote-job.sh
   validate-spec.sh
+  report-bug.sh
+  report-feedback.sh
   reopen-job.sh
   continue-verify.sh
+  job-transition.sh
   om-task-create.sh
   om-task-list.sh
   om-task-cancel.sh

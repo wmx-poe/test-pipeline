@@ -122,9 +122,9 @@ flowchart TB
 | Agent | 职责 | 触发 |
 |-------|------|------|
 | **agent-a** | 飞书唯一入口；需求 brainstorming、Bug/反馈登记、运维**下发**、进度摘要 | 飞书消息 + dispatch 发现 `feedback/inbox/*.md` 时触发 digest |
-| **agent-design** | Google Stitch 设计 | dispatch 发现 `pending` 或卡死 `designing` 时触发 |
-| **agent-coder** | Claude Code 实现 / 验证失败与 **Bug（含运维 Bug）** 修复 | dispatch 发现 `design_done`、`fix_needed` 或卡死 `implementing` 时触发 |
-| **agent-verifier** | Docker 运行时验证、Claude 审查、交付 | dispatch 发现 `impl_done`、卡死 `verifying` / `verified` 时触发 |
+| **agent-design** | Google Stitch 设计（**唯一可用 Stitch**） | dispatch 将 `pending→designing` 后，发现可信 `designing` 或卡死时触发 |
+| **agent-coder** | Claude Code 实现 / 验证失败与 **Bug（含运维 Bug）** 修复 | dispatch 将 `design_done`/`fix_needed→implementing` 后触发 |
+| **agent-verifier** | Docker 运行时验证、Claude 审查、交付 | dispatch 将 `impl_done→verifying` 后触发；或卡死 `verifying`/`verified` |
 | **agent-feedback** | 生成功能/缺陷/投诉反馈 | dispatch 发现 `delivered/` 或 `feedback/raw/` 有内容时触发 |
 | **agent-om** | 项目运维（部署/日志/诊断）；代码缺陷 → `report-bug.sh` | dispatch 发现 `<project>/ops/inbox/om-*.md` 或卡死 `ops/running/` 时触发 |
 
@@ -137,6 +137,8 @@ OpenClaw 内 **6 条** Cron **保持 `enabled: false`**，避免空跑 LLM。实
 | **[docs/GUIDE.md](docs/GUIDE.md)** | 首次部署：安装、飞书、LLM / Stitch / Claude Code 凭证 |
 | **[docs/VERIFICATION.md](docs/VERIFICATION.md)** | 验证约定：Docker 部署、运行时探活、`complete-verify` 自动回流 coder |
 | **[docs/AGENT-BOUNDARIES.md](docs/AGENT-BOUNDARIES.md)** | Agent 职责边界与脚本门禁（防越界） |
+| **[docs/PIPELINE-SCHEDULING.md](docs/PIPELINE-SCHEDULING.md)** | Timer 调度链与 `job-transition.sh` 入口/出口状态 |
+| **[docs/SECURITY.md](docs/SECURITY.md)** | OpenClaw 铁律、Stitch 隔离、防手改 status |
 | **[docs/OPS-TASKS.md](docs/OPS-TASKS.md)** | agent-om 运维任务状态机（MD 任务单） |
 | **[docs/BUG-FLOW.md](docs/BUG-FLOW.md)** | Bug（bugs.md）→ coder |
 | **[docs/FEEDBACK-FLOW.md](docs/FEEDBACK-FLOW.md)** | 用户反馈（user-feedback.md）→ agent-a 分拣 |
@@ -193,15 +195,16 @@ pipeline-workspace/<project>/          # project 由创建时 title 自动 slug
 
 [`scripts/cron-dispatch.sh`](scripts/cron-dispatch.sh) 是流水线的调度中枢。每个阶段遵循同一规则：
 
-1. **正常触发** — 上一阶段完成、当前阶段尚未占用（无进行中的 `status`）
-2. **卡死重试** — `status` 已变为「进行中」，但缺少该阶段的完成产物，且对应 Agent / 子进程未在跑
-3. **busy 防重复** — 检测到 OpenClaw cron 会话（`agent:<id>:cron`）或 Claude Code 子进程在跑时，跳过入队
+1. **入口推进** — `job-transition.sh`（`PIPELINE_DISPATCH=1`）将 `pending→designing`、`design_done|fix_needed→implementing`、`impl_done→verifying`
+2. **完整性校验** — `status_integrity_ok` 校验 history + 产物，**忽略手改 status**
+3. **卡死重试** — 进行中 `status` 缺完成产物，且 Agent / 子进程未在跑
+4. **busy 防重复** — OpenClaw cron 会话或 Claude Code 子进程在跑时跳过入队
 
-| Cron job | 正常条件 | 卡死条件（缺完成产物） | busy 检测 |
-|----------|----------|------------------------|-----------|
-| `pipeline-design-scan` | 有 `pending` 且无 `designing` | `designing` 且无 `design/DESIGN.md` | `agent-design` cron |
-| `pipeline-coder-scan` | 有 `design_done` 或 `fix_needed` 且无 `implementing` | `implementing` 且无 `reports/implement-summary.md` | `agent-coder` cron + `claude-pipeline.sh` |
-| `pipeline-verify-scan` | 有 `impl_done` 且无进行中的 verify | `verifying` 但 agent/claude 均未在跑（含 verify.md 已写 status 未推进）；或 `verified` 未登记 delivered | `agent-verifier` cron + `verify-pipeline.sh` + `claude-pipeline.sh` |
+| Cron job | 正常条件（经 integrity + 入口推进后） | 卡死条件（缺完成产物） | busy 检测 |
+|----------|--------------------------------------|------------------------|-----------|
+| `pipeline-design-scan` | 有可信 `designing` | `designing` 且无 `design/DESIGN.md` | `agent-design` cron |
+| `pipeline-coder-scan` | 有可信 `implementing` | `implementing` 且无 `reports/implement-summary.md` | `agent-coder` cron + `claude-pipeline.sh` |
+| `pipeline-verify-scan` | 有可信 `verifying` 且无进行中的 verify | `verifying` 空闲；或 `verified` 未登记 delivered | `agent-verifier` cron + `claude-pipeline.sh` |
 | `pipeline-feedback-scan` | `WORKSPACE_ROOT/*/delivered/` 或 `*/feedback/raw/` 有内容 | 同上（有源且 agent 未在跑即重试） | `agent-feedback` cron |
 | `pipeline-a-feedback-digest` | `feedback/inbox/*.md` 未处理 | 同上 | `agent-a` cron |
 | *(脚本)* `feishu-notify-scan.sh` | 每次 dispatch 开头扫描 | `design_done` / `impl_done` / `verified` / `delivered` 等未通知里程碑 | 无 LLM，`openclaw message send` |

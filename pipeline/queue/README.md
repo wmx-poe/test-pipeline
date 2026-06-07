@@ -16,12 +16,12 @@ agent-a 收到消息时先问：**新需求、Bug，还是运维？** Bug → `r
 | 状态 | 位置 | 处理 Agent |
 |------|------|------------|
 | `draft` | workspace `status=draft` | Agent A brainstorming（用户批准前，Cron 不扫描） |
-| `pending` | workspace `status=pending` | 用户批准 → Design 扫描 |
-| `designing` | 进行中 | agent-design |
-| `design_done` | workspace `design/` 有产物 | agent-coder 扫描 |
-| `implementing` | 进行中 | agent-coder |
-| `impl_done` | workspace `src/` 有代码 | agent-verifier 扫描 |
-| `verifying` | 进行中 | agent-verifier（先 verify-pipeline + Claude verify） |
+| `pending` | workspace `status=pending` | timer 推进 `designing`（须 validate-spec + integrity） |
+| `designing` | 进行中 | agent-design（Stitch）；出口 `job-transition→design_done` |
+| `design_done` | workspace `design/` 有产物 | timer 推进 `implementing` |
+| `implementing` | 进行中 | agent-coder；出口 `job-transition→impl_done` |
+| `impl_done` | 有 `implement-summary.md` | timer 推进 `verifying` |
+| `verifying` | 进行中 | agent-verifier；`complete-verify` 设 verified/fix_needed |
 | `verified` | verify PASS + deploy-info | 交付 → `<project>/delivered/` |
 | `fix_needed` | 验证 FAIL 或 Bug | agent-coder 读 verify-feedback / bugs.md |
 | `verify_paused` | 已达 10 轮仍未通过 | agent-a 飞书报告，等用户决定 |

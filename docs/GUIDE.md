@@ -587,7 +587,7 @@ export FEISHU_NOTIFY_TARGET="user:ou_xxxxxxxx"
 | 节点 | 触发方式 |
 |------|----------|
 | `pending` | `promote-job.sh` 入队后 |
-| `design_done` / `impl_done` / `verified` / `delivered` | `cron-dispatch.sh` 每分钟扫描 |
+| `design_done` / `impl_done` / `verified` / `delivered` | `feishu-notify-scan.sh`（dispatch 每分钟扫描） |
 | `verify_paused` | `complete-verify.sh` 达轮次上限后 |
 | 运维任务 done/failed | `om-task-complete.sh` |
 
