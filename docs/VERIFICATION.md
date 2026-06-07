@@ -51,8 +51,22 @@ Prompt 必须要求阅读 `verify-runtime.md`；**综合运行时 + 静态审查
 4. **验证失败（FAIL）**
 
 - `complete-verify.sh` 已写 `reports/verify-feedback.md` 并递增 `verifyRound`
-- 若 `verifyRound <= maxVerifyRounds`（默认 3）：`status` → **`fix_needed`**
-- 否则：`status` → `verify_failed`（需人工介入）
+- 默认 `maxVerifyRounds=10`：未超限时 → **`fix_needed`**（自动继续修复）
+- **超过 10 轮仍 FAIL** → **`verify_paused`** + `reports/verify-user-report.md`（关键报错），**停止自动轮训**，飞书询问用户
+- 用户同意继续 → `continue-verify.sh <job-id> --rounds 10`（再自动 10 轮）
+- 用户放弃 → agent-a 将 status 设为 `verify_failed`
+
+## 用户 Bug 与 job 策略
+
+| 类型 | 做法 |
+|------|------|
+| **新需求** | agent-a 确认后 `new-job.sh` → draft → pending |
+| **Bug / 改已有任务** | **同一 job**：`reopen-job.sh` → `fix_needed` + `reports/user-feedback.md` |
+| **未完成 spec** | 在原 job 更新 `spec.md`，不开新 job |
+
+```bash
+{{PIPELINE_ROOT}}/scripts/reopen-job.sh <job-id> --reason "Bug 描述" --by feishu-user
+```
 
 `verify-feedback.md` 模板：
 
@@ -74,9 +88,9 @@ Prompt 必须要求阅读 `verify-runtime.md`；**综合运行时 + 静态审查
 
 ## 修复阶段（agent-coder）
 
-当 `status === fix_needed`：
+当 `status === fix_needed`（验证 FAIL 或用户 Bug）：
 
-1. 读 `reports/verify-feedback.md`、`verify.md`、`verify-runtime.md`
+1. 读 `reports/verify-feedback.md`、`reports/user-feedback.md`（若有）、`verify.md`、`verify-runtime.md`
 2. `status` → `implementing`
 3. 用 `claude-pipeline.sh resume` 或 `implement` 修复 **全部阻塞项**
 4. 修复后重新运行测试；更新 `reports/implement-summary.md`（注明本轮 fix 摘要）
@@ -86,21 +100,22 @@ Prompt 必须要求阅读 `verify-runtime.md`；**综合运行时 + 静态审查
 
 ```
 impl_done → verifying → (PASS) verified → delivered
-                    ↘ (FAIL, round<N) fix_needed → implementing → impl_done → verifying ...
-                    ↘ (FAIL, round≥N) verify_failed
+                    ↘ (FAIL, round≤10) fix_needed → implementing → impl_done → verifying …
+                    ↘ (FAIL, round>10) verify_paused → 用户决定 → continue-verify / verify_failed
 ```
 
 | status | 含义 | 触发 Agent |
 |--------|------|------------|
-| `fix_needed` | 验证失败，等待 coder 修复 | agent-coder |
-| `verify_failed` | 超过最大验证轮次 | 人工 |
+| `fix_needed` | 验证失败或用户 Bug，等待 coder 修复 | agent-coder |
+| `verify_paused` | 已达 10 轮仍未通过，待用户决定是否继续 | agent-a 飞书通知 |
+| `verify_failed` | 用户放弃或人工终止 | 人工 |
 
 `status.json` 字段：
 
 ```json
 {
   "verifyRound": 0,
-  "maxVerifyRounds": 3
+  "maxVerifyRounds": 10
 }
 ```
 

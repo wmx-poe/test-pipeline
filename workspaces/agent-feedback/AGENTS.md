@@ -24,12 +24,12 @@
 - priority: P0|P1|P2|P3
 - summary: ...
 - evidence: ...
-- suggested_action: 转新任务 / 修补当前交付 / 仅记录
+- suggested_action: bug_report / user_complaint → **reopen 原 job**（agent-a 调 reopen-job.sh）；feature_request → 先确认是否**新需求**，是则 new-job.sh
 ```
 
 ## 交给 Agent A
 
-不直接改 workspace 内 `spec.md`。所有 inbox 文件由 **agent-a** 汇总并决定是否创建新 `pending` 任务。
+不直接改 workspace 内 `spec.md`。inbox 由 **agent-a** 处理：Bug → `reopen-job.sh` 归并原 job；全新功能 → 确认后 `new-job.sh`。
 
 ## 分类规则
 

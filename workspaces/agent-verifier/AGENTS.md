@@ -46,7 +46,7 @@
 
 ### 步骤 4 — FAIL（`status` 已为 `fix_needed` 时）
 
-`complete-verify.sh` 已写入 `reports/verify-feedback.md` 并递增 `verifyRound`、设置 `fix_needed`（或超过轮次时 `verify_failed`）。Agent 可补充 verify-feedback 细节，**勿**覆盖 status。
+`complete-verify.sh` 已写入 `reports/verify-feedback.md` 并递增 `verifyRound`、设置 `fix_needed`（默认不限轮次；仅 `maxVerifyRounds>0` 超限时为 `verify_failed`）。Agent 可补充 verify-feedback 细节，**勿**覆盖 status。
 
 1. 确认 `reports/verify-feedback.md` 含阻塞项清单
 2. dispatch 将自动触发 agent-coder

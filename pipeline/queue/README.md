@@ -2,6 +2,17 @@
 
 状态流转（每个任务在 `pipeline-workspace/<project>/jobs/<job-id>/` 工作，编排索引在 `pipeline/jobs/<job-id>/job.md`）：
 
+## 开 job 规则
+
+| 用户意图 | 做法 |
+|----------|------|
+| **新需求** | agent-a 确认 → `new-job.sh` → `draft` → … |
+| **Bug / 改已有任务 / 未完成补完** | **同一 job**：`reopen-job.sh` 或更新原 spec，**禁止** new-job |
+
+agent-a 收到消息时先问：**新需求，还是已有任务/Bug？**
+
+## 状态表
+
 | 状态 | 位置 | 处理 Agent |
 |------|------|------------|
 | `draft` | workspace `status=draft` | Agent A brainstorming（用户批准前，Cron 不扫描） |
@@ -12,11 +23,12 @@
 | `impl_done` | workspace `src/` 有代码 | agent-verifier 扫描 |
 | `verifying` | 进行中 | agent-verifier（先 verify-pipeline + Claude verify） |
 | `verified` | verify PASS + deploy-info | 交付 → `<project>/delivered/` |
-| `fix_needed` | verify FAIL，待修复 | agent-coder 读 verify-feedback.md |
-| `verify_failed` | 超过 maxVerifyRounds | 人工介入 |
+| `fix_needed` | 验证 FAIL 或用户 Bug | agent-coder 读 verify-feedback / user-feedback |
+| `verify_paused` | 已达 10 轮仍未通过 | agent-a 飞书报告，等用户决定 |
+| `verify_failed` | 用户放弃 | 人工 |
 | `delivered` | `pipeline-workspace/<project>/delivered/` | agent-feedback 定期扫描 |
 
-Agent A 通过 `skills/brainstorming/SKILL.md` 完成需求分析，写入 workspace 内 `spec.md`；用户批准后 `status` 从 `draft` 变为 `pending`。
+Agent A 通过 `skills/brainstorming/SKILL.md` 完成**新需求**分析；Bug 走 `reopen-job.sh`。
 
 ## 目录布局
 
@@ -28,4 +40,4 @@ pipeline-workspace/<project>/
   feedback/             # raw, inbox, inbox/processed
 ```
 
-验证与部署约定（Docker 运行时验证、失败回流 coder）：[docs/VERIFICATION.md](../../docs/VERIFICATION.md)
+验证与部署约定：[docs/VERIFICATION.md](../../docs/VERIFICATION.md)

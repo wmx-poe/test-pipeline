@@ -74,7 +74,27 @@ has_stuck_coder_job() {
 }
 
 has_stuck_verifier_job() {
-  has_stuck_job "verifying" "reports/verify.md" "agent-verifier" verifier_job_busy
+  local jobdir
+  while IFS= read -r jobdir; do
+    [[ -n "$jobdir" ]] || continue
+    if agent_cron_busy "agent-verifier"; then continue; fi
+    if verifier_job_busy "$jobdir"; then continue; fi
+    # verifying 且 agent/子进程均未在跑 → 卡死（含已有 verify.md 但 status 未推进）
+    return 0
+  done < <(each_job_status "verifying")
+  return 1
+}
+
+# 有 verifying 任务且 agent / claude 子进程正在跑（占 Docker 端口，阻塞并行 verify）
+is_verifying_in_flight() {
+  has_job_status verifying || return 1
+  if agent_cron_busy "agent-verifier"; then return 0; fi
+  local jobdir
+  while IFS= read -r jobdir; do
+    [[ -n "$jobdir" ]] || continue
+    if verifier_job_busy "$jobdir"; then return 0; fi
+  done < <(each_job_status "verifying")
+  return 1
 }
 
 # verified 但未复制到 project delivered/
@@ -109,10 +129,14 @@ should_run_coder() {
 }
 
 should_run_verify() {
-  if has_job_status impl_done && ! has_job_status verifying; then
+  if has_stuck_verifier_job || has_stuck_verified_job; then
     return 0
   fi
-  has_stuck_verifier_job || has_stuck_verified_job
+  # impl_done 仅在无「进行中的 verify」时入队；verifying 但已空闲视为卡死（见上）
+  if has_job_status impl_done && ! is_verifying_in_flight; then
+    return 0
+  fi
+  return 1
 }
 
 has_feedback_sources() {
@@ -136,13 +160,26 @@ has_unprocessed_inbox() {
   return 1
 }
 
+has_unnotified_verify_paused() {
+  local f jobdir
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    jq -e '.status == "verify_paused"' "$f" >/dev/null 2>&1 || continue
+    jobdir="$(dirname "$f")"
+    [[ -f "${jobdir}/reports/verify-user-report.md" ]] || continue
+    [[ -f "${jobdir}/reports/.verify-paused-notified" ]] && continue
+    return 0
+  done < <(each_status_json)
+  return 1
+}
+
 should_run_feedback() {
   has_feedback_sources || return 1
   ! agent_cron_busy "agent-feedback"
 }
 
 should_run_a_feedback() {
-  has_unprocessed_inbox || return 1
+  has_unprocessed_inbox || has_unnotified_verify_paused || return 1
   ! agent_cron_busy "agent-a"
 }
 
@@ -201,14 +238,14 @@ run_dispatch() {
     if has_stuck_verified_job; then
       vlog "条件满足: verified 卡死（未登记 delivered 且 agent-verifier 未在跑）"
     elif has_stuck_verifier_job; then
-      vlog "条件满足: verifying 卡死（无 verify.md 且 claude 未在跑）"
-    else
-      vlog "条件满足: impl_done 且尚无 verifying"
+      vlog "条件满足: verifying 卡死（agent/claude 未在跑，含 verify.md 已写但 status 未推进）"
+    elif has_job_status impl_done; then
+      vlog "条件满足: impl_done 且无进行中的 verify"
     fi
     trigger_job "pipeline-verify-scan"
   else
-    if has_job_status verifying && agent_cron_busy "agent-verifier"; then
-      vlog "跳过 verify: agent-verifier 正在运行"
+    if is_verifying_in_flight; then
+      vlog "跳过 verify: 另有 verifying 任务进行中（agent 或 claude 在跑）"
     else
       vlog "跳过 verify"
     fi
@@ -226,10 +263,14 @@ run_dispatch() {
   fi
 
   if should_run_a_feedback; then
-    vlog "条件满足: feedback/inbox 有未处理 md 且 agent-a 未在跑"
+    if has_unnotified_verify_paused; then
+      vlog "条件满足: verify_paused 待通知用户且 agent-a 未在跑"
+    else
+      vlog "条件满足: feedback/inbox 有未处理 md 且 agent-a 未在跑"
+    fi
     trigger_job "pipeline-a-feedback-digest"
   else
-    if has_unprocessed_inbox && agent_cron_busy "agent-a"; then
+    if ( has_unprocessed_inbox || has_unnotified_verify_paused ) && agent_cron_busy "agent-a"; then
       vlog "跳过 a-feedback-digest: agent-a 正在运行"
     else
       vlog "跳过 a-feedback-digest"

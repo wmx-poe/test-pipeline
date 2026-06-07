@@ -3,7 +3,7 @@
 你是 **agent-coder**。Cron 扫描三类任务：
 
 1. `status === "design_done"` — 新实现
-2. `status === "fix_needed"` — **验证失败回流**，须按 verify-feedback 修复
+2. `status === "fix_needed"` — **验证失败或用户 Bug 回流**，须读 verify-feedback / user-feedback 修复
 3. `status === "implementing"` 且 **无** `reports/implement-summary.md` — 卡死续跑
 
 约定见 `{{PIPELINE_ROOT}}/docs/VERIFICATION.md`。
@@ -24,11 +24,11 @@
 4. Dockerfile 内使用国内源（apt 阿里云、pip 清华、npm npmmirror），见 `docs/VERIFICATION.md`
 4. 完成后 `status` → `impl_done`，写 `reports/implement-summary.md`
 
-### 验证失败回流（fix_needed）
+### 验证失败 / Bug 回流（fix_needed）
 
-1. **必读**：`reports/verify-feedback.md`、`reports/verify.md`、`reports/verify-runtime.md`
+1. **必读**：`reports/verify-feedback.md`（若有）、`reports/user-feedback.md`（若有）、`reports/verify.md`、`reports/verify-runtime.md`
 2. 更新 `status` → `implementing`
-3. 按 verify-feedback 中的阻塞项 **逐项修复**（不可忽略运行时失败）
+3. 按反馈中的阻塞项 **逐项修复**（默认最多自动 10 轮；超限 `verify_paused` 等用户 `continue-verify.sh`）
 4. 本地或 Docker 内跑测试；更新 `reports/implement-summary.md`（注明 fix round 与修复摘要）
 5. `status` → `impl_done`，等待 agent-verifier 重新验证
 

@@ -12,7 +12,8 @@
 | **项目 slug** | `new-job.sh "标题"` 按 title 生成 `<project>`，并建 `jobs/`、`delivered/`、`feedback/` |
 | **懒调度** | OpenClaw Cron 默认关闭；systemd timer → `cron-dispatch.sh` 扫 `status.json`，有任务才触发 |
 | **验证闭环** | `verify-pipeline.sh`（Docker 部署探活）→ `claude-pipeline verify` → **`complete-verify.sh`** 自动设 status |
-| **失败回流** | 运行时或综合 FAIL → `fix_needed` + `verify-feedback.md` → dispatch 触发 coder（最多 3 轮） |
+| **开 job 规则** | **仅新需求** `new-job.sh`；Bug/改已有任务用 `reopen-job.sh` 在同一 job 内迭代 |
+| **失败回流** | 默认自动 **10 轮**；超限 → `verify_paused` + 飞书报告，用户决定 `continue-verify.sh` |
 | **迁移** | 旧 job 在编排仓库内：`./scripts/migrate-job-layout.sh` |
 
 **状态机**（工作区 `status.json`）：
@@ -20,8 +21,8 @@
 ```
 draft → pending → designing → design_done → implementing → impl_done → verifying
   → verified → delivered/
-  ↘ fix_needed → implementing …（verifyRound ≤ maxVerifyRounds，默认 3）
-  ↘ verify_failed（超限，人工）
+  ↘ fix_needed → implementing …（默认最多自动 10 轮）
+  ↘ verify_paused（10 轮仍未过）→ 用户决定 continue / 放弃
 ```
 
 **验证脚本链**（不依赖 LLM 手工改 status）：
@@ -125,7 +126,7 @@ pipeline-workspace/<project>/          # project 由创建时 title 自动 slug
 |----------|----------|------------------------|-----------|
 | `pipeline-design-scan` | 有 `pending` 且无 `designing` | `designing` 且无 `design/DESIGN.md` | `agent-design` cron |
 | `pipeline-coder-scan` | 有 `design_done` 或 `fix_needed` 且无 `implementing` | `implementing` 且无 `reports/implement-summary.md` | `agent-coder` cron + `claude-pipeline.sh` |
-| `pipeline-verify-scan` | 有 `impl_done` 且无 `verifying` | `verifying` 且无 `reports/verify.md`；或 `verified` 但未登记 `<project>/delivered/<job-id>/` | `agent-verifier` cron + `verify-pipeline.sh` + `claude-pipeline.sh` |
+| `pipeline-verify-scan` | 有 `impl_done` 且无进行中的 verify | `verifying` 但 agent/claude 均未在跑（含 verify.md 已写 status 未推进）；或 `verified` 未登记 delivered | `agent-verifier` cron + `verify-pipeline.sh` + `claude-pipeline.sh` |
 | `pipeline-feedback-scan` | `WORKSPACE_ROOT/*/delivered/` 或 `*/feedback/raw/` 有内容 | 同上（有源且 agent 未在跑即重试） | `agent-feedback` cron |
 | `pipeline-a-feedback-digest` | `WORKSPACE_ROOT/*/feedback/inbox/*.md` 存在 | 同上（inbox 有未处理 md 且 agent 未在跑） | `agent-a` cron |
 
@@ -155,7 +156,9 @@ journalctl --user -u pipeline-cron-dispatch.service -n 20
 
 | 脚本 | 用途 |
 |------|------|
-| `new-job.sh` / `validate-spec.sh` / `promote-job.sh` | 创建任务、校验 spec、入队 |
+| `new-job.sh` / `validate-spec.sh` / `promote-job.sh` | 创建任务、校验 spec、入队（**仅新需求**） |
+| `reopen-job.sh` | Bug/变更：在原 job 登记并 → `fix_needed`（**不开新 job**） |
+| `continue-verify.sh` | 用户同意继续：再自动跑 N 轮（默认 10） |
 | `cron-dispatch.sh` | 读 status 触发各阶段 Cron |
 | `verify-pipeline.sh` | Docker compose 构建部署、健康探活 |
 | `complete-verify.sh` | 验证报告 → `verified` / `fix_needed` / `verify_failed` |
@@ -203,6 +206,7 @@ docs/             GUIDE.md, VERIFICATION.md；env-troubleshoot 见根目录
 | 飞书无回复 | [GUIDE §四](docs/GUIDE.md#四长连接发布与配对)；`openclaw logs --follow` |
 | Cron 不跑 | `VERBOSE=1 ./scripts/cron-dispatch.sh`；[env-troubleshoot §1.4.1](env-troubleshoot.md#141-流水线-cron-dispatch有任务才扫) |
 | 任务卡在某阶段 | 见上文「Cron dispatch 与卡死重试」；`VERBOSE=1 ./scripts/cron-dispatch.sh` |
+| 新任务 verify 被老任务 verifying 挡住 | 老任务 verifying 且 agent 空闲 → 应触发卡死重试；仍卡住则 `./scripts/complete-verify.sh <job-id> --full` |
 | 验证 FAIL 未触发 coder | 查 `reports/verify-runtime.md` 结论；手动 `./scripts/complete-verify.sh <job-id> --full` |
 | Docker / verify 不可用 | `./scripts/install-docker.sh`；[VERIFICATION.md](docs/VERIFICATION.md) |
 | LLM / Stitch / Claude Code | [env-troubleshoot.md](env-troubleshoot.md) 对应章节 |

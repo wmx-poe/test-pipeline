@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: "收到新功能/改版/实现类需求时 MUST 先加载本 skill。通过多轮澄清、方案对比与设计确认，产出 workspace 内 spec.md，用户批准后再入队（status=pending）。"
+description: "仅当用户确认是【新需求】时 MUST 加载本 skill。Bug/改已有任务不得调用 new-job.sh。通过多轮澄清产出 spec.md，用户批准后再入队（status=pending）。"
 ---
 
 # Brainstorming — 需求分析与规格产出
@@ -8,7 +8,10 @@ description: "收到新功能/改版/实现类需求时 MUST 先加载本 skill�
 将用户意图转化为可被下游 Agent（design → coder → verifier）无歧义执行的 `spec.md`。
 
 <HARD-GATE>
-在用户明确批准设计之前：
+本 skill **仅用于新需求**（用户已确认不是 Bug/改已有 job）。
+
+- Bug、验证失败、交付后缺陷、补完未完成项 → 使用原 job + `reopen-job.sh`，**禁止** new-job.sh
+- 在用户明确批准设计之前：
 - 不得将 `status.json` 设为 `pending`
 - 不得修改 `src/`、不得调用 Stitch / Claude Code
 - 不得声称「流水线已接手」
@@ -27,8 +30,8 @@ description: "收到新功能/改版/实现类需求时 MUST 先加载本 skill�
 
 ## 流程（按顺序）
 
-1. **探索上下文** — 阅读 `pipeline/jobs/` 近期指针、各 project 工作区、`README.md`、用户附件
-2. **创建 draft 任务** — `new-job.sh` 创建指针 + workspace、`status.json`（`draft`）、空壳 `spec.md`
+1. **探索上下文** — 确认是新需求；阅读近期 job 指针与各 project 工作区
+2. **创建 draft 任务** — **仅新需求** 调用 `new-job.sh`
 3. **澄清问题** — 飞书一次只问一个问题；优先选择题；聚焦目的、约束、验收标准
 4. **方案对比** — 给出 2–3 种方案、权衡与推荐（写在飞书摘要中，最终写入 spec）
 5. **呈现设计** — 按复杂度分节（架构、组件、数据流、错误处理、测试）；每节后询问是否 OK
@@ -94,6 +97,7 @@ description: "收到新功能/改版/实现类需求时 MUST 先加载本 skill�
 
 ## 续聊与修改
 
-- 用户对 **draft** 任务回复修改意见：更新 workspace 内 `spec.md`，保持 `draft`，再次请求确认
+- 用户对 **draft** 任务回复修改意见：更新 workspace 内 `spec.md`，保持 `draft`
 - 用户说「可以了」「确认」「开始吧」等明确批准：才设 `pending`
-- 已 `pending` 的任务：不要擅自改 spec；若用户坚持变更，建议新建 job 或等当前任务结束
+- 已 `pending` 的任务：在原 job 更新 spec（`## 变更记录`），**不要** new-job.sh
+- Bug / 改已有功能：走 `reopen-job.sh`，**不要** new-job.sh
