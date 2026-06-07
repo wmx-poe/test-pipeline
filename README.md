@@ -15,10 +15,10 @@
 | **开 job 规则** | **仅用户确认的新需求** `new-job.sh`；Bug / 改已有任务在同一 job 内迭代，**禁止**为缺陷开新 job |
 | **Bug vs 反馈** | **Bug** → `report-bug.sh` → `bugs.md` + `fix_needed` → coder；**反馈** → `report-feedback.sh` → `user-feedback.md` → agent-a 分拣，**不**自动进 coder |
 | **运维分离** | agent-a **不下场** docker / 日志；通过 `om-task-create` 下发 MD 任务单 → **agent-om** 执行；运维发现代码缺陷同样 `report-bug.sh` → coder |
-| **飞书网关** | agent-a 所有 exec 经 **`agent-a-run.sh` 白名单**；查进度用 `job-status.sh`，保证飞书响应速度 |
+| **飞书网关** | agent-a 所有 exec 经 **`agent-a-run.sh` 白名单**；查进度用 `job-status.sh`；**里程碑主动推送**见下节 |
 | **脚本门禁** | `PIPELINE_BOUNDARY_STRICT=1` 时关键脚本校验 `PIPELINE_AGENT`，防 Agent 越界 |
 | **失败回流** | 默认自动 **10 轮**；超限 → `verify_paused` + **飞书主动推送**，用户决定 `continue-verify.sh` |
-| **里程碑推送** | `feishu-notify-scan.sh` + 脚本钩子：`pending` / `design_done` / `impl_done` / `verified` / `verify_paused` / `delivered` / 运维任务完成 |
+| **里程碑推送** | 关键节点经 `openclaw message send` **主动推飞书**（脚本直发，不耗 LLM）；见 [§飞书里程碑推送](#飞书里程碑推送) |
 | **迁移** | 旧 job 在编排仓库内：`./scripts/migrate-job-layout.sh` |
 
 **状态机**（工作区 `status.json`）：
@@ -60,6 +60,33 @@ agent-a 收到消息后先判断意图（不确定时先问用户）：
 
 运维执行中发现**代码缺陷**时，agent-om 调用 `report-bug.sh --by agent-om --om-task <id>`，与用户 Bug **同等**进入 coder（附 `ops/reports/` 上下文）。详见 [docs/BUG-FLOW.md](docs/BUG-FLOW.md)、[docs/FEEDBACK-FLOW.md](docs/FEEDBACK-FLOW.md)、[docs/OPS-TASKS.md](docs/OPS-TASKS.md)。
 
+## 飞书里程碑推送
+
+流水线在关键节点**主动推消息**，无需用户轮询「进展如何」。
+
+**配置**（`config/.env`）：
+
+```bash
+export FEISHU_NOTIFY_TARGET="user:ou_xxxxxxxx"   # 配对用户的 open_id，必填才推送
+# export FEISHU_NOTIFY_ENABLED=0                 # 设为 0 可关闭（默认开启）
+```
+
+`open_id` 获取：飞书私聊机器人后，从 OpenClaw 会话 metadata 的 `sender_id`，或 `openclaw pairing list feishu`。详见 [GUIDE §五](docs/GUIDE.md#里程碑主动推送无需轮询问进度)。
+
+| 节点 | 触发方式 | 消息要点 |
+|------|----------|----------|
+| `pending` | `promote-job.sh` 入队后 | 任务已入队，即将设计 |
+| `design_done` | `cron-dispatch` → `feishu-notify-scan.sh` | 设计完成，开始开发 |
+| `impl_done` | 同上 | 开发完成，开始验证 |
+| `verified` | `complete-verify.sh` | 验证通过，准备交付 |
+| `verify_paused` | `complete-verify.sh`（达轮次上限） | 关键报错摘要 + 继续/放弃指引 |
+| `delivered` | `feishu-notify-scan.sh` | 已交付到 `project/delivered/` |
+| 运维 done/failed | `om-task-complete.sh` | 任务 ID + 摘要 |
+
+去重：各 job 在 `reports/.feishu-notified-<milestone>` 写标记，同一节点不重复推送。`fix_needed` 等中间态**不推送**（避免验证循环刷屏）。
+
+与用户主动问进度的关系：推送是**单向通知**；Bug / 反馈 / 继续验证仍通过在飞书对话 agent-a，或执行对应脚本。
+
 ## 架构
 
 ```mermaid
@@ -87,11 +114,14 @@ flowchart TB
   F --> Inbox[(feedback/inbox)]
   Inbox --> A
   Cron5[dispatch timer] --> OM
+  CronDispatch[cron-dispatch] --> Notify[feishu-notify-scan]
+  Notify -->|主动推送| User
+  CV[complete-verify / promote-job] --> Notify
 ```
 
 | Agent | 职责 | 触发 |
 |-------|------|------|
-| **agent-a** | 飞书唯一入口；需求 brainstorming、Bug/反馈登记、运维**下发**、进度摘要 | 飞书消息 + dispatch 发现 `inbox/*.md` / `verify_paused` 时触发 |
+| **agent-a** | 飞书唯一入口；需求 brainstorming、Bug/反馈登记、运维**下发**、进度摘要 | 飞书消息 + dispatch 发现 `feedback/inbox/*.md` 时触发 digest |
 | **agent-design** | Google Stitch 设计 | dispatch 发现 `pending` 或卡死 `designing` 时触发 |
 | **agent-coder** | Claude Code 实现 / 验证失败与 **Bug（含运维 Bug）** 修复 | dispatch 发现 `design_done`、`fix_needed` 或卡死 `implementing` 时触发 |
 | **agent-verifier** | Docker 运行时验证、Claude 审查、交付 | dispatch 发现 `impl_done`、卡死 `verifying` / `verified` 时触发 |
@@ -121,7 +151,7 @@ Ubuntu 22.04+、Node.js 22+、**Docker + Docker Compose**（验证部署必需�
 ```bash
 cd /home/wmx/workspace/test-pipeline
 ./scripts/install-ubuntu.sh && cp -n config/env.example config/.env
-# 填写 config/.env 后按 GUIDE 完成 onboard → deploy → 飞书长连接 → cron timer
+# 填写 config/.env（含 FEISHU_*、FEISHU_NOTIFY_TARGET）后按 GUIDE 完成 onboard → deploy → 飞书长连接 → cron timer
 ```
 
 完整步骤（含飞书开放平台、密钥、验收）：**[docs/GUIDE.md §一](docs/GUIDE.md#一快速开始)**。
@@ -155,7 +185,7 @@ pipeline-workspace/<project>/          # project 由创建时 title 自动 slug
   feedback/             # raw, inbox, inbox/processed
 ```
 
-环境变量：`PIPELINE_ROOT`（编排仓库）、`WORKSPACE_ROOT`（默认 `../pipeline-workspace`）。见 [config/env.example](config/env.example)。
+环境变量：`PIPELINE_ROOT`（编排仓库）、`WORKSPACE_ROOT`（默认 `../pipeline-workspace`）、`FEISHU_NOTIFY_TARGET`（里程碑推送目标）。见 [config/env.example](config/env.example)。
 
 验证阶段 **禁止仅静态审查**：须 Docker 构建部署 + 探活，产出 `deploy-info.md`（访问地址与测试账号）。`complete-verify.sh` 读 `verify-runtime.md` / `verify.md` 自动更新 status，详见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
 
@@ -173,7 +203,8 @@ pipeline-workspace/<project>/          # project 由创建时 title 自动 slug
 | `pipeline-coder-scan` | 有 `design_done` 或 `fix_needed` 且无 `implementing` | `implementing` 且无 `reports/implement-summary.md` | `agent-coder` cron + `claude-pipeline.sh` |
 | `pipeline-verify-scan` | 有 `impl_done` 且无进行中的 verify | `verifying` 但 agent/claude 均未在跑（含 verify.md 已写 status 未推进）；或 `verified` 未登记 delivered | `agent-verifier` cron + `verify-pipeline.sh` + `claude-pipeline.sh` |
 | `pipeline-feedback-scan` | `WORKSPACE_ROOT/*/delivered/` 或 `*/feedback/raw/` 有内容 | 同上（有源且 agent 未在跑即重试） | `agent-feedback` cron |
-| `pipeline-a-feedback-digest` | `feedback/inbox/*.md` 或 `verify_paused` 待通知 | 同上 | `agent-a` cron |
+| `pipeline-a-feedback-digest` | `feedback/inbox/*.md` 未处理 | 同上 | `agent-a` cron |
+| *(脚本)* `feishu-notify-scan.sh` | 每次 dispatch 开头扫描 | `design_done` / `impl_done` / `verified` / `delivered` 等未通知里程碑 | 无 LLM，`openclaw message send` |
 | `pipeline-om-scan` | `<project>/ops/inbox/om-*.md` pending | `ops/running/` 卡死且 agent-om 未在跑 | `agent-om` cron |
 
 卡死时 Agent 应续跑而非重复入队：`implementing` 且 `src/` 已有代码 → `claude-pipeline.sh resume`；`designing` 无 `DESIGN.md` → 重新走 Stitch；digest 完成后 agent-a 将 md 移到 `<project>/feedback/inbox/processed/`。
@@ -215,7 +246,7 @@ journalctl --user -u pipeline-cron-dispatch.service -n 20
 | `cron-dispatch.sh` | 读 status / ops/inbox 触发各阶段 Cron |
 | `verify-pipeline.sh` | Docker compose 构建部署、健康探活 |
 | `complete-verify.sh` | 验证报告 → `verified` / `fix_needed` / `verify_paused`（并触发飞书推送） |
-| `feishu-notify-scan.sh` | 扫描工作区里程碑，经 `openclaw message send` 主动推飞书（需 `FEISHU_NOTIFY_TARGET`） |
+| `feishu-notify-scan.sh` | 扫描工作区里程碑并推飞书（由 `cron-dispatch` 每分钟调用；库：`lib/feishu-notify.sh`） |
 | `claude-pipeline.sh` | Claude Code：`implement` / `verify` / `verify-fix` / `resume` |
 | `migrate-job-layout.sh` | 旧 job 目录迁移到 pipeline-workspace |
 | `install-docker.sh` | Docker 安装（验证必需） |
@@ -237,7 +268,7 @@ openclaw update
 config/           openclaw.json5, claude/codex profile, env.example, systemd/
 workspaces/       各 Agent 的 AGENTS.md / SOUL.md
 pipeline/         jobs 索引（job.md 指针）、queue 文档
-scripts/          cron-dispatch, verify-pipeline, complete-verify, claude-pipeline, migrate-job-layout, ...
+scripts/          cron-dispatch, feishu-notify-scan, verify-pipeline, complete-verify, claude-pipeline, ...
 docs/             GUIDE.md, VERIFICATION.md；env-troubleshoot 见根目录
 
 # 与 test-pipeline 平级（WORKSPACE_ROOT，默认 pipeline-workspace/）
@@ -258,6 +289,7 @@ docs/             GUIDE.md, VERIFICATION.md；env-troubleshoot 见根目录
 | 现象 | 处理 |
 |------|------|
 | 飞书无回复 | [GUIDE §四](docs/GUIDE.md#四长连接发布与配对)；`openclaw logs --follow`；检查 agent-a 是否卡在长耗时 exec（应走 `om-task-create` 交 agent-om） |
+| 里程碑未收到推送 | 确认 `config/.env` 已设 `FEISHU_NOTIFY_TARGET`；手动 `./scripts/feishu-notify-scan.sh`；查 `reports/.feishu-notified-*` 是否已去重 |
 | agent-a 越界跑 docker | 应经 `agent-a-run.sh` 白名单；系统操作走 `om-task-create.sh` |
 | Cron 不跑 | `VERBOSE=1 ./scripts/cron-dispatch.sh`；[env-troubleshoot §1.4.1](env-troubleshoot.md#141-流水线-cron-dispatch有任务才扫) |
 | 任务卡在某阶段 | 见上文「Cron dispatch 与卡死重试」；`VERBOSE=1 ./scripts/cron-dispatch.sh` |
