@@ -201,7 +201,11 @@ ensure_project_layout() {
     "$(project_root "$project")/jobs" \
     "$(project_delivered_dir "$project")" \
     "$(project_feedback_dir "$project")/raw" \
-    "$(project_feedback_dir "$project")/inbox/processed"
+    "$(project_feedback_dir "$project")/inbox/processed" \
+    "$(project_root "$project")/ops/inbox" \
+    "$(project_root "$project")/ops/running" \
+    "$(project_root "$project")/ops/reports" \
+    "$(project_root "$project")/ops/done"
 }
 
 write_job_pointer() {

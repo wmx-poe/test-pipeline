@@ -1,0 +1,23 @@
+{
+  "defaultServer": "local",
+  "servers": [
+    {
+      "id": "local",
+      "name": "本机（流水线宿主机）",
+      "host": "localhost",
+      "user": null,
+      "deployRoot": "/home/wmx/workspace/pipeline-workspace",
+      "notes": "验证阶段 verify-pipeline 默认在此机 docker compose 探活"
+    },
+    {
+      "id": "prod",
+      "source": "env",
+      "name": "生产 VPS",
+      "envHost": "DEPLOY_SERVER_PROD_HOST",
+      "envUser": "DEPLOY_SERVER_PROD_SSH_USER",
+      "envDeployRoot": "DEPLOY_SERVER_PROD_ROOT",
+      "envName": "DEPLOY_SERVER_PROD_NAME",
+      "notes": "IP/SSH 在 config/.env 配置（免密登录）；未配置时不出现在列表"
+    }
+  ]
+}

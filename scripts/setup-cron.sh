@@ -38,10 +38,11 @@ EOF
 done
 
 SCAN_DESIGN="扫描 pipeline/jobs/*/job.md 指向的工作区：① status=pending → validate-spec 通过后更新 designing，用 Stitch MCP 产出到 design/；② status=designing 但 design/DESIGN.md 不存在 → 视为卡死，重新设计。完成后 status=design_done。无任务则 NO_REPLY。"
-SCAN_CODER="扫描工作区：① status=design_done 或 fix_needed → 更新 implementing，用 ${PIPELINE_ROOT}/scripts/claude-pipeline.sh 修复/实现；fix_needed 须先读 reports/verify-feedback.md。② status=implementing 但 reports/implement-summary.md 不存在 → 视为卡死。完成后 status=impl_done。无任务则 NO_REPLY。"
+SCAN_CODER="扫描工作区：① status=design_done 或 fix_needed → implementing，用 claude-pipeline.sh 实现/修复。fix_needed 须先读 reports/bugs.md（含 agent-a 与 agent-om 登记的缺陷）和 reports/verify-feedback.md；运维 Bug 若引用 ops/reports/*.md 须一并阅读。② implementing 无 implement-summary → 卡死续跑。完成后 impl_done。无任务则 NO_REPLY。"
 SCAN_VERIFY="扫描工作区：① status=impl_done → claude-pipeline verify（内含 verify-pipeline + complete-verify 自动设 verified/fix_needed）；② verifying 但 verify.md 不存在 → 卡死重跑；③ verified 但未登记 delivered → 补交付。PASS 须含 deploy-info.md。无任务则 NO_REPLY。"
 SCAN_FEEDBACK="扫描 ${WORKSPACE_ROOT}/*/delivered 与 */feedback/raw，生成 */feedback/inbox/*.md。若上次扫描中断导致 inbox 未更新，且 raw/delivered 仍有待处理内容，重新扫描。无新内容则 NO_REPLY。"
 SCAN_A_FEEDBACK="① 读取 ${WORKSPACE_ROOT}/*/feedback/inbox 下未处理 md（不含 processed/），向用户摘要。② 扫描 status=verify_paused 且存在 reports/verify-user-report.md、未 touch reports/.verify-paused-notified 的任务：读报告，飞书发送关键报错摘要，询问用户是否继续（用户说继续则 ${PIPELINE_ROOT}/scripts/continue-verify.sh <job-id> --rounds 10 --by feishu-user；放弃则改 verify_failed）。通知后 touch reports/.verify-paused-notified。无新反馈且无 verify_paused 则 NO_REPLY。"
+SCAN_OM="扫描 ${WORKSPACE_ROOT}/*/ops/inbox/om-*.md：① pending 任务 om-task-claim → 按 type 执行 → om-task-complete 写 ops/reports/。② 若发现代码缺陷，对 jobId 调用 ${PIPELINE_ROOT}/scripts/report-bug.sh --by agent-om --om-task <id>，再 complete。③ running 卡死则续跑或 failed。禁止改 src/。无任务则 NO_REPLY。"
 
 # 占位 schedule（job 为 disabled，不由 OpenClaw 定时触发）
 PLACEHOLDER_CRON="0 0 1 1 *"
@@ -128,6 +129,7 @@ add_job "pipeline-coder-scan" "agent-coder" "$SCAN_CODER" "$MODEL_FLASH"
 add_job "pipeline-verify-scan" "agent-verifier" "$SCAN_VERIFY" "$MODEL_FLASH"
 add_job "pipeline-feedback-scan" "agent-feedback" "$SCAN_FEEDBACK" "$MODEL_FLASH"
 add_job "pipeline-a-feedback-digest" "agent-a" "$SCAN_A_FEEDBACK" "$MODEL_FLASH"
+add_job "pipeline-om-scan" "agent-om" "$SCAN_OM" "$MODEL_FLASH"
 
 dedupe_cron_by_name "pipeline-a-feedback-digest"
 

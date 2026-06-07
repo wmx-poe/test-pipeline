@@ -7,7 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/job-paths.sh
 source "${SCRIPT_DIR}/lib/job-paths.sh"
+# shellcheck source=lib/agent-boundary.sh
+source "${SCRIPT_DIR}/lib/agent-boundary.sh"
 load_env
+require_pipeline_agents "continue-verify.sh" agent-a manual
 
 usage() {
   cat <<EOF

@@ -183,6 +183,37 @@ should_run_a_feedback() {
   ! agent_cron_busy "agent-a"
 }
 
+has_pending_ops_task() {
+  local project_dir
+  [[ -d "$WORKSPACE_ROOT" ]] || return 1
+  for project_dir in "$WORKSPACE_ROOT"/*; do
+    [[ -d "$project_dir" ]] || continue
+    compgen -G "${project_dir}/ops/inbox/om-"*.md >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+has_stuck_om_task() {
+  local project_dir f
+  [[ -d "$WORKSPACE_ROOT" ]] || return 1
+  for project_dir in "$WORKSPACE_ROOT"/*; do
+    [[ -d "${project_dir}/ops/running" ]] || continue
+    for f in "${project_dir}/ops/running/"om-*.md; do
+      [[ -f "$f" ]] || continue
+      if agent_cron_busy "agent-om"; then continue; fi
+      return 0
+    done
+  done
+  return 1
+}
+
+should_run_om() {
+  if has_pending_ops_task; then
+    ! agent_cron_busy "agent-om" && return 0
+  fi
+  has_stuck_om_task
+}
+
 trigger_job() {
   local name="$1"
   local id
@@ -259,6 +290,21 @@ run_dispatch() {
       vlog "跳过 feedback-scan: agent-feedback 正在运行"
     else
       vlog "跳过 feedback-scan"
+    fi
+  fi
+
+  if should_run_om; then
+    if has_pending_ops_task; then
+      vlog "条件满足: ops/inbox 有 pending 且 agent-om 未在跑"
+    else
+      vlog "条件满足: ops/running 卡死且 agent-om 未在跑"
+    fi
+    trigger_job "pipeline-om-scan"
+  else
+    if has_pending_ops_task && agent_cron_busy "agent-om"; then
+      vlog "跳过 om-scan: agent-om 正在运行"
+    else
+      vlog "跳过 om-scan"
     fi
   fi
 

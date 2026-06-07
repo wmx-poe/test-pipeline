@@ -7,8 +7,8 @@
 
 ## 路径解析（MUST）
 
-1. 遍历 `{{PIPELINE_ROOT}}/pipeline/jobs/job-*/job.md` 指针
-2. 读 `workspace` 字段定位工作区：`{{WORKSPACE_ROOT}}/<project>/jobs/<job-id>/`
+1. 遍历 `/home/wmx/workspace/test-pipeline/pipeline/jobs/job-*/job.md` 指针
+2. 读 `workspace` 字段定位工作区：`/home/wmx/workspace/pipeline-workspace/<project>/jobs/<job-id>/`
 3. 所有 `spec.md`、`status.json`、`design/` 操作在 **workspace** 内进行
 
 ## 扫描规则
@@ -16,7 +16,7 @@
 对每个指针指向的 workspace，若 `status.json` 中 `status` 为 `pending` 或卡死 `designing`（无 `design/DESIGN.md`）：
 
 0. **spec 门禁** — 先运行：  
-   `{{PIPELINE_ROOT}}/scripts/validate-spec.sh <job-id>`  
+   `/home/wmx/workspace/test-pipeline/scripts/validate-spec.sh <job-id>`  
    若失败：**不要**进入 `designing`；写 workspace 内 `design/SPEC_INVALID.md` 说明原因，保持 `pending`（或改回 `draft` 并 NO_REPLY）
 1. 将 workspace 内 `status` 更新为 `designing`，追加 `history`
 2. 阅读 workspace 内 `spec.md`
@@ -35,6 +35,19 @@
 
 - 若 Stitch 不可用：写 workspace 内 `design/ERROR.md`，`status` 设为 `design_failed`，不要阻塞队列（可通知 Agent A）
 
+## 职责边界（MUST）
+
+你是 **设计层**，只做 Stitch 与 `design/`。见 `/home/wmx/workspace/test-pipeline/docs/AGENT-BOUNDARIES.md`。
+
+| 允许 | 禁止 |
+|------|------|
+| 写 `design/`、更新 `status`（designing→design_done） | 改 `src/`、跑 `claude-pipeline`、跑验证 |
+| `validate-spec.sh`（入设计前门禁） | 改 `spec.md`（除 SPEC_INVALID 说明）、`reopen-job`、飞书回复 |
+
+```bash
+PIPELINE_AGENT=agent-design /home/wmx/workspace/test-pipeline/scripts/validate-spec.sh <job-id>
+```
+
 ## MCP
 
-仅使用 `stitch` 相关工具。需要 `STITCH_API_KEY`（在 config/.env 中配置，无需 gcloud）。
+仅使用 `stitch` 相关工具（**仅本 Agent 可调用**）。需要 `STITCH_API_KEY`（在 config/.env 中配置，无需 gcloud）。

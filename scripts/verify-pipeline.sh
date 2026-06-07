@@ -7,7 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/job-paths.sh
 source "${SCRIPT_DIR}/lib/job-paths.sh"
+# shellcheck source=lib/agent-boundary.sh
+source "${SCRIPT_DIR}/lib/agent-boundary.sh"
 load_env
+require_pipeline_agents "verify-pipeline.sh" agent-verifier manual
 
 usage() {
   cat <<EOF
@@ -319,7 +322,8 @@ EOF
   append_summary "**运行时结论: FAIL** (${failures} 项失败，详见 verify-runtime.log)"
   log_both "运行时验证失败"
   if [[ -x "${SCRIPT_DIR}/complete-verify.sh" ]]; then
-    "${SCRIPT_DIR}/complete-verify.sh" "$job_id" --runtime-only || true
+    PIPELINE_VERIFY_CHAIN=1 PIPELINE_AGENT=agent-verifier \
+      "${SCRIPT_DIR}/complete-verify.sh" "$job_id" --runtime-only || true
   fi
   exit 1
 }

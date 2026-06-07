@@ -5,6 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/agent-boundary.sh
+source "${SCRIPT_DIR}/lib/agent-boundary.sh"
 load_env
 
 SETTINGS_FILE="${HOME}/.claude/pipeline-settings.json"
@@ -56,6 +58,15 @@ PROMPT="$3"
 require_claude_env
 require_cmd claude
 
+case "$MODE" in
+  implement|resume|verify-fix)
+    require_pipeline_agents "claude-pipeline.sh" agent-coder manual
+    ;;
+  verify)
+    require_pipeline_agents "claude-pipeline.sh" agent-verifier manual
+    ;;
+esac
+
 if [[ ! -d "$SRC_DIR" ]]; then
   echo "目录不存在: $SRC_DIR" >&2
   exit 1
@@ -99,7 +110,8 @@ case "$MODE" in
     if [[ "$RUNTIME_EC" -ne 0 ]]; then
       echo "[claude-pipeline] 运行时验证失败，跳过 Claude 审查，自动回流 coder" >&2
       if [[ -x "${SCRIPT_DIR}/complete-verify.sh" ]]; then
-        "${SCRIPT_DIR}/complete-verify.sh" "$JOB_ID" --runtime-only || true
+        PIPELINE_VERIFY_CHAIN=1 PIPELINE_AGENT=agent-verifier \
+          "${SCRIPT_DIR}/complete-verify.sh" "$JOB_ID" --runtime-only || true
       fi
       exit "${RUNTIME_EC:-1}"
     fi
@@ -116,7 +128,8 @@ case "$MODE" in
     PROMPT="$FULL_PROMPT"
     run_claude dontAsk "Bash,Read,Glob,Grep" "${REPORTS_DIR}/verify.md"
     if [[ -x "${SCRIPT_DIR}/complete-verify.sh" ]]; then
-      "${SCRIPT_DIR}/complete-verify.sh" "$JOB_ID" --full || true
+      PIPELINE_VERIFY_CHAIN=1 PIPELINE_AGENT=agent-verifier \
+        "${SCRIPT_DIR}/complete-verify.sh" "$JOB_ID" --full || true
     fi
     ;;
   verify-fix)

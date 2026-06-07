@@ -69,6 +69,7 @@
     },
   },
 
+  // Agent 职责边界：飞书→agent-a；Stitch→agent-design；脚本门禁见 docs/AGENT-BOUNDARIES.md
   agents: {
     defaults: {
       model: "${OPENCLAW_DEFAULT_MODEL}",
@@ -90,6 +91,7 @@
         name: "需求编排 Agent A",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-a",
         identity: { name: "Agent A" },
+        // 编排：可 exec 编排脚本；禁止 cron（由 dispatch 触发 digest）
         tools: {
           allow: ["read", "write", "edit", "exec", "message", "sessions_list", "sessions_history"],
           deny: ["cron"],
@@ -99,6 +101,7 @@
         id: "agent-design",
         name: "设计 Stitch",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-design",
+        // 设计：无 message（不飞书回复）；Stitch 见 mcp.servers.stitch.codex.agents
         tools: {
           allow: ["read", "write", "edit", "exec"],
           deny: ["cron", "message"],
@@ -108,6 +111,7 @@
         id: "agent-coder",
         name: "Claude Code 实现",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-coder",
+        // 实现：无 message；脚本边界限制 claude-pipeline implement/resume
         tools: {
           allow: ["read", "write", "edit", "exec"],
           deny: ["cron", "message"],
@@ -117,6 +121,7 @@
         id: "agent-verifier",
         name: "Claude Code 验证",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-verifier",
+        // 验证：可 message（交付通知）；脚本边界限制 verify 链
         tools: {
           allow: ["read", "write", "edit", "exec", "message"],
           deny: ["cron"],
@@ -126,6 +131,16 @@
         id: "agent-feedback",
         name: "反馈扫描",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-feedback",
+        tools: {
+          allow: ["read", "write", "edit", "exec"],
+          deny: ["cron", "message"],
+        },
+      },
+      {
+        id: "agent-om",
+        name: "运维 OM",
+        workspace: "${PIPELINE_ROOT}/workspaces/agent-om",
+        // 项目级 deploy/logs/diagnose；任务单见 <project>/ops/
         tools: {
           allow: ["read", "write", "edit", "exec"],
           deny: ["cron", "message"],

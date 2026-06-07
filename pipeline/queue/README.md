@@ -9,7 +9,7 @@
 | **新需求** | agent-a 确认 → `new-job.sh` → `draft` → … |
 | **Bug / 改已有任务 / 未完成补完** | **同一 job**：`reopen-job.sh` 或更新原 spec，**禁止** new-job |
 
-agent-a 收到消息时先问：**新需求，还是已有任务/Bug？**
+agent-a 收到消息时先问：**新需求、Bug，还是运维？** Bug → `report-bug.sh`；运维 → `ops/inbox`（agent-om）。见 [BUG-FLOW.md](../../docs/BUG-FLOW.md)。
 
 ## 状态表
 
@@ -23,7 +23,7 @@ agent-a 收到消息时先问：**新需求，还是已有任务/Bug？**
 | `impl_done` | workspace `src/` 有代码 | agent-verifier 扫描 |
 | `verifying` | 进行中 | agent-verifier（先 verify-pipeline + Claude verify） |
 | `verified` | verify PASS + deploy-info | 交付 → `<project>/delivered/` |
-| `fix_needed` | 验证 FAIL 或用户 Bug | agent-coder 读 verify-feedback / user-feedback |
+| `fix_needed` | 验证 FAIL 或 Bug | agent-coder 读 verify-feedback / bugs.md |
 | `verify_paused` | 已达 10 轮仍未通过 | agent-a 飞书报告，等用户决定 |
 | `verify_failed` | 用户放弃 | 人工 |
 | `delivered` | `pipeline-workspace/<project>/delivered/` | agent-feedback 定期扫描 |

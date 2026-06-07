@@ -30,7 +30,7 @@
 1. 设计（Google Stitch）→ `design/`
 2. 实现（Claude Code `claude-pipeline.sh`）→ `src/`（须含 `docker-compose.yml` 与健康检查）
 3. 验证 → `verify-pipeline.sh`（Docker 部署 + 探活）+ `claude-pipeline.sh verify` → `reports/verify.md`
-4. 验证 FAIL → `fix_needed` → coder 读 `verify-feedback.md` 修复 → 重新验证（最多 3 轮）
+4. 验证 FAIL 或 Bug（用户/运维）→ `fix_needed` → coder 读 `bugs.md` + `verify-feedback.md`（运维 Bug 另读 `ops/reports/`）→ 重新验证
 5. 验证 PASS → `deploy-info.md` 含访问地址与测试账号 → 交付与反馈循环
 
 详见 `docs/VERIFICATION.md`。

@@ -56,12 +56,13 @@ Prompt 必须要求阅读 `verify-runtime.md`；**综合运行时 + 静态审查
 - 用户同意继续 → `continue-verify.sh <job-id> --rounds 10`（再自动 10 轮）
 - 用户放弃 → agent-a 将 status 设为 `verify_failed`
 
-## 用户 Bug 与 job 策略
+## Bug / 反馈与 job 策略
 
 | 类型 | 做法 |
 |------|------|
 | **新需求** | agent-a 确认后 `new-job.sh` → draft → pending |
-| **Bug / 改已有任务** | **同一 job**：`reopen-job.sh` → `fix_needed` + `reports/user-feedback.md` |
+| **Bug**（用户 / 运维） | `report-bug.sh` → `fix_needed` + `reports/bugs.md`（agent-a 或 agent-om） |
+| **用户反馈** | `report-feedback.sh` → `reports/user-feedback.md`（不触发 coder） |
 | **未完成 spec** | 在原 job 更新 `spec.md`，不开新 job |
 
 ```bash
@@ -88,9 +89,9 @@ Prompt 必须要求阅读 `verify-runtime.md`；**综合运行时 + 静态审查
 
 ## 修复阶段（agent-coder）
 
-当 `status === fix_needed`（验证 FAIL 或用户 Bug）：
+当 `status === fix_needed`（验证 FAIL、用户 Bug 或 **运维 Bug**）：
 
-1. 读 `reports/verify-feedback.md`、`reports/user-feedback.md`（若有）、`verify.md`、`verify-runtime.md`
+1. 读 `reports/bugs.md`（含 agent-om 条目时对照 `<project>/ops/reports/*.md`）、`reports/verify-feedback.md`、`verify.md`、`verify-runtime.md`
 2. `status` → `implementing`
 3. 用 `claude-pipeline.sh resume` 或 `implement` 修复 **全部阻塞项**
 4. 修复后重新运行测试；更新 `reports/implement-summary.md`（注明本轮 fix 摘要）

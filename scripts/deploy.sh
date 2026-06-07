@@ -138,7 +138,7 @@ log "WORKSPACE_ROOT=$WORKSPACE_ROOT"
 log "OPENCLAW_HOME=$OPENCLAW_HOME"
 
 # 工作区：替换占位符
-for ws in agent-a agent-design agent-coder agent-verifier agent-feedback; do
+for ws in agent-a agent-design agent-coder agent-verifier agent-feedback agent-om; do
   dest="${PIPELINE_ROOT}/workspaces/${ws}"
   substitute_workspace_files "$dest"
 done

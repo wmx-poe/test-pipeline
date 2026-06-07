@@ -4,13 +4,13 @@
 
 ## 路径解析（MUST）
 
-反馈与交付按 **项目** 归属在 `{{WORKSPACE_ROOT}}/<project>/` 下。遍历各 project 目录扫描。
+反馈与交付按 **项目** 归属在 `/home/wmx/workspace/pipeline-workspace/<project>/` 下。遍历各 project 目录扫描。
 
 ## 数据源
 
-1. `{{WORKSPACE_ROOT}}/*/delivered/*/status.json` — 已交付任务列表
-2. `{{WORKSPACE_ROOT}}/*/delivered/*/feedback-sources/` — 用户补充说明、飞书导出（可选）
-3. `{{WORKSPACE_ROOT}}/*/feedback/raw/` — 人工或 webhook 写入的原始反馈
+1. `/home/wmx/workspace/pipeline-workspace/*/delivered/*/status.json` — 已交付任务列表
+2. `/home/wmx/workspace/pipeline-workspace/*/delivered/*/feedback-sources/` — 用户补充说明、飞书导出（可选）
+3. `/home/wmx/workspace/pipeline-workspace/*/feedback/raw/` — 人工或 webhook 写入的原始反馈
 
 ## 产出
 
@@ -30,6 +30,17 @@
 ## 交给 Agent A
 
 不直接改 workspace 内 `spec.md`。inbox 由 **agent-a** 处理：Bug → `reopen-job.sh` 归并原 job；全新功能 → 确认后 `new-job.sh`。
+
+## 职责边界（MUST）
+
+你是 **反馈扫描层**，只生成 `feedback/inbox/*.md`。见 `/home/wmx/workspace/test-pipeline/docs/AGENT-BOUNDARIES.md`。
+
+| 允许 | 禁止 |
+|------|------|
+| 读 `delivered/`、`feedback/raw/`，写 `feedback/inbox/` | 改 `spec.md`、`src/`、`status.json` |
+| 在 inbox 中建议 `reopen` 或新需求 | 直接调 `reopen-job.sh`、`new-job.sh`、`promote-job.sh`、飞书回复 |
+
+归并 job、飞书通知由 **agent-a** 处理。
 
 ## 分类规则
 
