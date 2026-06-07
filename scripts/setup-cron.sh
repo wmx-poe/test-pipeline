@@ -37,11 +37,13 @@ EOF
   esac
 done
 
-SCAN_DESIGN="扫描 pipeline/jobs/*/job.md 指向的工作区：① status=pending → validate-spec 通过后更新 designing，用 Stitch MCP 产出到 design/；② status=designing 但 design/DESIGN.md 不存在 → 视为卡死，重新设计。完成后 status=design_done。无任务则 NO_REPLY。"
-SCAN_CODER="扫描工作区：① status=design_done 或 fix_needed → 更新 implementing，用 ${PIPELINE_ROOT}/scripts/claude-pipeline.sh 修复/实现；fix_needed 须先读 reports/verify-feedback.md。② status=implementing 但 reports/implement-summary.md 不存在 → 视为卡死。完成后 status=impl_done。无任务则 NO_REPLY。"
-SCAN_VERIFY="扫描工作区：① status=impl_done → claude-pipeline verify（内含 verify-pipeline + complete-verify 自动设 verified/fix_needed）；② verifying 但 verify.md 不存在 → 卡死重跑；③ verified 但未登记 delivered → 补交付。PASS 须含 deploy-info.md。无任务则 NO_REPLY。"
-SCAN_FEEDBACK="扫描 ${WORKSPACE_ROOT}/*/delivered 与 */feedback/raw，生成 */feedback/inbox/*.md。若上次扫描中断导致 inbox 未更新，且 raw/delivered 仍有待处理内容，重新扫描。无新内容则 NO_REPLY。"
-SCAN_A_FEEDBACK="读取 ${WORKSPACE_ROOT}/*/feedback/inbox 下未处理 md（不含 inbox/processed/），向用户摘要；若上次 digest 中断导致 inbox 仍有未处理文件，重新 digest。无新反馈则 NO_REPLY。"
+SCAN_DESIGN="【禁止手改 status.json】入口 pending→designing 已由 timer 完成。扫描 pending/designing 卡死：validate-spec → Stitch → design/ → job-transition --to design_done。无任务 NO_REPLY。"
+SCAN_CODER="【禁止手改 status.json】入口 design_done/fix_needed→implementing 已由 timer 完成。读 spec/design 或 verify-feedback/bugs.md → claude-pipeline implement|resume → job-transition --to impl_done。无任务 NO_REPLY。"
+SCAN_VERIFY="【禁止手改 status.json】入口 impl_done→verifying 已由 timer 完成。verify-pipeline（本机 IP 探活）→ claude-pipeline verify → complete-verify 自动设 verified/fix_needed/verify_paused。verified 补 delivered。无任务 NO_REPLY。"
+SCAN_OM="【agent-om 专用】扫描 ${WORKSPACE_ROOT}/*/ops/tasks/ 中 status=pending 的任务；claim → 执行 deploy/diagnose/logs（deploy 须 task 内 server 字段）；写 ops/reports/；发现代码 Bug 用 report-bug.sh --om-task。本地验证 IP 见 detect-pipeline-host-ip.sh。无任务 NO_REPLY。"
+SCAN_FEEDBACK="扫描 ${WORKSPACE_ROOT}/*/delivered 与 */feedback/raw，生成 */feedback/inbox/*.md。Bug 建议 reopen 原 job，非新 job。无新内容 NO_REPLY。"
+SCAN_A_FEEDBACK="读取 ${WORKSPACE_ROOT}/*/feedback/inbox 未处理 md，摘要给用户；bug→reopen-job；新功能→确认后 new-job。无新反馈 NO_REPLY。"
+SCAN_A_VERIFY="扫描 status=verify_paused 且未通知的任务：读 verify-user-report.md，飞书通知用户是否继续下一轮（continue-verify.sh）。通知后 touch reports/.verify-paused-notified。无任务 NO_REPLY。"
 
 # 占位 schedule（job 为 disabled，不由 OpenClaw 定时触发）
 PLACEHOLDER_CRON="0 0 1 1 *"
@@ -126,8 +128,10 @@ log "注册流水线 Cron（disabled + dispatch 触发）..."
 add_job "pipeline-design-scan" "agent-design" "$SCAN_DESIGN" "$MODEL_PRO"
 add_job "pipeline-coder-scan" "agent-coder" "$SCAN_CODER" "$MODEL_FLASH"
 add_job "pipeline-verify-scan" "agent-verifier" "$SCAN_VERIFY" "$MODEL_FLASH"
+add_job "pipeline-om-scan" "agent-om" "$SCAN_OM" "$MODEL_FLASH"
 add_job "pipeline-feedback-scan" "agent-feedback" "$SCAN_FEEDBACK" "$MODEL_FLASH"
 add_job "pipeline-a-feedback-digest" "agent-a" "$SCAN_A_FEEDBACK" "$MODEL_FLASH"
+add_job "pipeline-a-verify-notify" "agent-a" "$SCAN_A_VERIFY" "$MODEL_FLASH"
 
 dedupe_cron_by_name "pipeline-a-feedback-digest"
 

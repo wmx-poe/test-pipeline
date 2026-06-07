@@ -123,6 +123,15 @@
         },
       },
       {
+        id: "agent-om",
+        name: "运维 Agent OM",
+        workspace: "${PIPELINE_ROOT}/workspaces/agent-om",
+        tools: {
+          allow: ["read", "write", "edit", "exec"],
+          deny: ["cron", "message"],
+        },
+      },
+      {
         id: "agent-feedback",
         name: "反馈扫描",
         workspace: "${PIPELINE_ROOT}/workspaces/agent-feedback",

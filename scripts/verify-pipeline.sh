@@ -9,6 +9,12 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/job-paths.sh"
 load_env
 
+# 本地验证使用 test-pipeline 部署机 IP
+if [[ -z "${VERIFY_DEPLOY_HOST:-}" ]]; then
+  VERIFY_DEPLOY_HOST="$("${SCRIPT_DIR}/detect-pipeline-host-ip.sh")"
+  export VERIFY_DEPLOY_HOST
+fi
+
 usage() {
   cat <<EOF
 用法: verify-pipeline.sh <job-id|workspace-dir>

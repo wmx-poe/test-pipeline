@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/job-paths.sh
 source "${SCRIPT_DIR}/lib/job-paths.sh"
+# shellcheck source=lib/status-integrity.sh
+source "${SCRIPT_DIR}/lib/status-integrity.sh"
 load_env
 
 usage() {
@@ -109,7 +111,8 @@ verify_v = "${verify_v}"
 job_id = "${job_id}"
 
 data.setdefault("verifyRound", 0)
-data.setdefault("maxVerifyRounds", 3)
+data.setdefault("verifyIteration", 0)
+data.setdefault("maxVerifyRounds", 10)
 current = data.get("status", "")
 history = data.setdefault("history", [])
 
@@ -144,13 +147,32 @@ if round_next <= max_r:
     print(f"OK: {job_id} -> fix_needed (round {round_next}/{max_r})")
     raise SystemExit(1)
 
-target = "verify_failed"
+target = "verify_paused"
 append_history(current, target, "complete-verify.sh",
-               f"超过 maxVerifyRounds={max_r}")
+               f"本轮 {max_r} 次验证均未通过，等待用户确认是否进入下一轮")
 data["status"] = target
 data["updatedAt"] = now
 status_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print(f"OK: {job_id} -> verify_failed (round {round_next}>{max_r})", file=__import__("sys").stderr)
+# 供 agent-a 通知用户
+user_report = job_dir / "reports" / "verify-user-report.md"
+user_report.write_text(f"""# 验证暂停（等待用户决定）
+
+- job-id: {job_id}
+- 验证轮次: {round_next}/{max_r}（第 {data.get('verifyIteration', 0)} 次迭代）
+- 运行时: {runtime_v}
+- 综合审查: {verify_v}
+- 时间: {now}
+
+## 关键报错摘要
+
+请阅读 verify-feedback.md、verify-runtime.md、verify.md。
+
+## 下一步
+
+用户在飞书回复 **「继续验证」** → agent-a 运行 continue-verify.sh
+用户回复 **「放弃」** → agent-a 与用户确认后标记放弃
+""", encoding="utf-8")
+print(f"OK: {job_id} -> verify_paused (round {round_next}>{max_r})", file=__import__("sys").stderr)
 raise SystemExit(1)
 PY
 }
@@ -172,6 +194,7 @@ main() {
 
   local job_dir runtime_md verify_md runtime_v verify_v overall
   job_dir="$(resolve_job_dir "$job_arg")"
+  repair_status_json "${job_dir}/status.json"
   runtime_md="${job_dir}/reports/verify-runtime.md"
   verify_md="${job_dir}/reports/verify.md"
 

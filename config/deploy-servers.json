@@ -1,0 +1,14 @@
+{
+  "servers": [
+    {
+      "id": "local",
+      "name": "流水线本机（验证服务器）",
+      "description": "test-pipeline 部署机 IP，由 detect-pipeline-host-ip.sh 解析",
+      "host": "{{PIPELINE_HOST}}",
+      "user": "{{USER}}",
+      "port": 22,
+      "deployRoot": "{{WORKSPACE_ROOT}}"
+    }
+  ],
+  "notes": "生产环境 VPS 在 config/.env 中配置 DEPLOY_SERVER_PROD_*；用户部署时必须指定 server id（如 prod、local）"
+}

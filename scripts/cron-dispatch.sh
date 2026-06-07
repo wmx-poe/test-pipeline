@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# 有 pipeline 任务时才触发 OpenClaw Cron（不空跑 LLM）
-# 由 systemd timer 或 crontab 每分钟调用；OpenClaw 内各 job 应保持 enabled=false
+# 流水线调度中枢：systemd timer 每分钟调用；有任务才触发 OpenClaw Cron
+# 入口 status 仅本脚本经 job-transition.sh 推进；OpenClaw Agent 禁止手改 status.json
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=lib/job-paths.sh
 source "${SCRIPT_DIR}/lib/job-paths.sh"
+# shellcheck source=lib/status-integrity.sh
+source "${SCRIPT_DIR}/lib/status-integrity.sh"
+# shellcheck source=lib/om-tasks.sh
+source "${SCRIPT_DIR}/lib/om-tasks.sh"
 load_env
 
 require_cmd openclaw
@@ -27,17 +31,27 @@ cron_job_id() {
   jq -r --arg n "$name" '.jobs[] | select(.name==$n) | .id' "$CRON_JSON" 2>/dev/null | head -1
 }
 
-# OpenClaw cron 会话在跑（避免同一 agent 重复入队）
 agent_cron_busy() {
   local agent_id="$1"
   pgrep -f "agent:${agent_id}:cron" >/dev/null 2>&1
 }
 
-# 遍历 workspace 内 status.json（通过 pipeline/jobs/*/job.md 索引）
-# each_job_status / has_job_status 定义于 lib/job-paths.sh
+advance_entry_status() {
+  local frm="$1" to="$2"
+  local jobdir
+  while IFS= read -r jobdir; do
+    [[ -n "$jobdir" ]] || continue
+    local job_id
+    job_id="$(basename "$jobdir")"
+    if [[ "$DRY_RUN" == 1 ]]; then
+      vlog "[dry-run] job-transition ${job_id} ${frm}->${to}"
+    else
+      PIPELINE_AGENT=cron-dispatch.sh "${SCRIPT_DIR}/job-transition.sh" "$job_id" \
+        --to "$to" --by cron-dispatch.sh --note "timer entry" 2>/dev/null || true
+    fi
+  done < <(each_job_status_safe "$frm")
+}
 
-# status=进行中 但缺少完成产物，且 agent / 子进程未在跑 → 卡死
-# $1=status  $2=完成产物相对路径  $3=agentId  $4=可选子进程 busy 检测函数名
 has_stuck_job() {
   local status="$1" artifact_rel="$2" agent_id="$3" sub_busy_fn="${4:-}"
   local jobdir
@@ -47,7 +61,7 @@ has_stuck_job() {
     if agent_cron_busy "$agent_id"; then continue; fi
     if [[ -n "$sub_busy_fn" ]] && "$sub_busy_fn" "$jobdir"; then continue; fi
     return 0
-  done < <(each_job_status "$status")
+  done < <(each_job_status_safe "$status")
   return 1
 }
 
@@ -65,19 +79,10 @@ verifier_job_busy() {
     || pgrep -f "claude .*${src}" >/dev/null 2>&1
 }
 
-has_stuck_design_job() {
-  has_stuck_job "designing" "design/DESIGN.md" "agent-design"
-}
+has_stuck_design_job() { has_stuck_job "designing" "design/DESIGN.md" "agent-design"; }
+has_stuck_coder_job() { has_stuck_job "implementing" "reports/implement-summary.md" "agent-coder" coder_job_busy; }
+has_stuck_verifier_job() { has_stuck_job "verifying" "reports/verify.md" "agent-verifier" verifier_job_busy; }
 
-has_stuck_coder_job() {
-  has_stuck_job "implementing" "reports/implement-summary.md" "agent-coder" coder_job_busy
-}
-
-has_stuck_verifier_job() {
-  has_stuck_job "verifying" "reports/verify.md" "agent-verifier" verifier_job_busy
-}
-
-# verified 但未复制到 project delivered/
 has_stuck_verified_job() {
   local jobdir job_id delivered
   while IFS= read -r jobdir; do
@@ -87,32 +92,56 @@ has_stuck_verified_job() {
     [[ -n "$delivered" && -d "$delivered" ]] && continue
     if agent_cron_busy "agent-verifier"; then continue; fi
     return 0
-  done < <(each_job_status "verified")
+  done < <(each_job_status_safe "verified")
   return 1
 }
 
 should_run_design() {
-  if has_job_status pending && ! has_job_status designing; then
-    return 0
-  fi
+  if has_job_status_safe pending && ! has_job_status_safe designing; then return 0; fi
   has_stuck_design_job
 }
 
 should_run_coder() {
-  if has_job_status fix_needed && ! has_job_status implementing; then
-    return 0
-  fi
-  if has_job_status design_done && ! has_job_status implementing; then
-    return 0
-  fi
+  if has_job_status_safe fix_needed && ! has_job_status_safe implementing; then return 0; fi
+  if has_job_status_safe design_done && ! has_job_status_safe implementing; then return 0; fi
   has_stuck_coder_job
 }
 
 should_run_verify() {
-  if has_job_status impl_done && ! has_job_status verifying; then
-    return 0
-  fi
+  if has_job_status_safe impl_done && ! has_job_status_safe verifying; then return 0; fi
   has_stuck_verifier_job || has_stuck_verified_job
+}
+
+has_pending_om_task() {
+  local project_dir tasks
+  [[ -d "$WORKSPACE_ROOT" ]] || return 1
+  for project_dir in "$WORKSPACE_ROOT"/*; do
+    [[ -d "$project_dir" ]] || continue
+    tasks="$(om_tasks_dir "$(basename "$project_dir")")"
+    compgen -G "${tasks}/om-*.md" >/dev/null 2>&1 || continue
+    grep -l '^status: pending' "${tasks}"/om-*.md >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+should_run_om() {
+  has_pending_om_task || return 1
+  ! agent_cron_busy "agent-om"
+}
+
+has_verify_paused_notify() {
+  local jobdir flag
+  while IFS= read -r jobdir; do
+    flag="${jobdir}/reports/.verify-paused-notified"
+    [[ -f "${jobdir}/reports/verify-user-report.md" ]] || continue
+    [[ -f "$flag" ]] && continue
+    return 0
+  done < <(each_job_status_safe "verify_paused")
+  return 1
+}
+
+should_run_a_verify_notify() {
+  has_verify_paused_notify && ! agent_cron_busy "agent-a"
 }
 
 has_feedback_sources() {
@@ -165,75 +194,51 @@ trigger_job() {
 }
 
 run_dispatch() {
+  # timer 推进入口 status（Agent 禁止手改）
   if should_run_design; then
-    if has_stuck_design_job; then
-      vlog "条件满足: designing 卡死（无 design/DESIGN.md 且 agent-design 未在跑）"
-    else
-      vlog "条件满足: pending 且尚无 designing"
-    fi
+    advance_entry_status pending designing
     trigger_job "pipeline-design-scan"
   else
-    if has_job_status designing && agent_cron_busy "agent-design"; then
-      vlog "跳过 design: agent-design 正在运行"
-    else
-      vlog "跳过 design: 无 pending / designing 未卡死"
-    fi
+    vlog "跳过 design"
   fi
 
   if should_run_coder; then
-    if has_job_status fix_needed; then
-      vlog "条件满足: fix_needed（验证失败待 coder 修复）"
-    elif has_stuck_coder_job; then
-      vlog "条件满足: implementing 卡死（无 implement-summary 且 claude 未在跑）"
-    else
-      vlog "条件满足: design_done 且尚无 implementing"
-    fi
+    advance_entry_status design_done implementing
+    advance_entry_status fix_needed implementing
     trigger_job "pipeline-coder-scan"
   else
-    if has_job_status implementing && agent_cron_busy "agent-coder"; then
-      vlog "跳过 coder: agent-coder 正在运行"
-    else
-      vlog "跳过 coder"
-    fi
+    vlog "跳过 coder"
   fi
 
   if should_run_verify; then
-    if has_stuck_verified_job; then
-      vlog "条件满足: verified 卡死（未登记 delivered 且 agent-verifier 未在跑）"
-    elif has_stuck_verifier_job; then
-      vlog "条件满足: verifying 卡死（无 verify.md 且 claude 未在跑）"
-    else
-      vlog "条件满足: impl_done 且尚无 verifying"
-    fi
+    advance_entry_status impl_done verifying
     trigger_job "pipeline-verify-scan"
   else
-    if has_job_status verifying && agent_cron_busy "agent-verifier"; then
-      vlog "跳过 verify: agent-verifier 正在运行"
-    else
-      vlog "跳过 verify"
-    fi
+    vlog "跳过 verify"
+  fi
+
+  if should_run_om; then
+    vlog "条件满足: 有 pending 运维任务"
+    trigger_job "pipeline-om-scan"
+  else
+    vlog "跳过 om"
+  fi
+
+  if should_run_a_verify_notify; then
+    vlog "条件满足: verify_paused 待通知用户"
+    trigger_job "pipeline-a-verify-notify"
   fi
 
   if should_run_feedback; then
-    vlog "条件满足: delivered/raw 有待扫描内容且 agent-feedback 未在跑"
     trigger_job "pipeline-feedback-scan"
   else
-    if has_feedback_sources && agent_cron_busy "agent-feedback"; then
-      vlog "跳过 feedback-scan: agent-feedback 正在运行"
-    else
-      vlog "跳过 feedback-scan"
-    fi
+    vlog "跳过 feedback-scan"
   fi
 
   if should_run_a_feedback; then
-    vlog "条件满足: feedback/inbox 有未处理 md 且 agent-a 未在跑"
     trigger_job "pipeline-a-feedback-digest"
   else
-    if has_unprocessed_inbox && agent_cron_busy "agent-a"; then
-      vlog "跳过 a-feedback-digest: agent-a 正在运行"
-    else
-      vlog "跳过 a-feedback-digest"
-    fi
+    vlog "跳过 a-feedback-digest"
   fi
 }
 

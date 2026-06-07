@@ -1,55 +1,28 @@
-# TOOLS.md - Local Notes
+# Brainstorming / 任务脚本
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+- Skill：`skills/brainstorming/SKILL.md`（**仅新需求**）
+- 创建：`{{PIPELINE_ROOT}}/scripts/new-job.sh "标题"`
+- 校验：`validate-spec.sh <job-id>`
+- 入队：`promote-job.sh <job-id>`
 
-## What Goes Here
+## 状态 / Bug / 运维
 
-Things like:
+- 查状态：`job-status.sh <job-id>` | `--latest`
+- Bug（不开新 job）：`report-bug.sh <job-id> --reason "..."`
+- 反馈：`report-feedback.sh <job-id> --type suggestion --reason "..."`
+- 归并：`reopen-job.sh <job-id> --reason "..."`
+- 验证继续：`continue-verify.sh <job-id> --rounds 10`
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
+## 运维（委托 agent-om）
 
-## Examples
+- 列服务器：`deploy-servers-list.sh`
+- 创建任务：`om-task-create.sh <project> --type deploy --server prod --title "..." --job-id <id>`
+- 列任务：`om-task-list.sh <project>`
 
-```markdown
-### Cameras
+## 禁止
 
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
+- 手 edit `status.json`
+- 自写 bash/python 改文件
+- 代跑 claude-pipeline / verify-pipeline
 
-### SSH
-
-- home-server → 192.168.1.100, user: admin
-
-### TTS
-
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
-```
-
-## Why Separate?
-
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
-
----
-
-Add whatever helps you do your job. This is your cheat sheet.
-
-## Brainstorming
-
-- Skill：`skills/brainstorming/SKILL.md`
-- 新需求必须先走 brainstorming，`draft` → 用户批准 → `pending`
-- 任务索引：`{{PIPELINE_ROOT}}/pipeline/jobs/<job-id>/job.md`（指针）
-- 任务工作区：`{{WORKSPACE_ROOT}}/<project>/jobs/<job-id>/`（spec、status 等）
-- 任务模板：`{{PIPELINE_ROOT}}/pipeline/jobs/_template/spec.md`
-- 创建任务：`{{PIPELINE_ROOT}}/scripts/new-job.sh "标题"`（默认 draft）
-- 校验 spec：`{{PIPELINE_ROOT}}/scripts/validate-spec.sh <job-id>`
-- 批准入队：`{{PIPELINE_ROOT}}/scripts/promote-job.sh <job-id>`
-
-## Related
-
-- [Agent workspace](/concepts/agent-workspace)
+调度见 `docs/PIPELINE-SCHEDULING.md`。

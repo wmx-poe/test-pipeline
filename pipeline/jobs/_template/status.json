@@ -8,6 +8,7 @@
   "createdBy": "feishu-user",
   "assignee": null,
   "verifyRound": 0,
-  "maxVerifyRounds": 3,
+  "verifyIteration": 0,
+  "maxVerifyRounds": 10,
   "history": []
 }
